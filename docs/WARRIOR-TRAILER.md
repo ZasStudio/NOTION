@@ -49,6 +49,10 @@ Diecisiete tipos de bloque, menú `/` con búsqueda en vivo y atajos de Markdown
 - Texto, encabezados 1–3, viñetas, listas numeradas, tareas, desplegable, cita,
   destacado, divisor, código con resaltado de lenguaje, imagen y marcador web.
 - **Bloque HTML**: visuales interactivos dentro de un `iframe` con `sandbox`.
+- **Imágenes** con el selector completo: subir del equipo, arrastrar y soltar,
+  pegar del portapapeles, insertar por enlace o reutilizar una subida previa,
+  con redimensionado por asas, alineación y pie de foto. La portada y el icono
+  de página aceptan lo mismo.
 - Base de datos y subpágina.
 - Índice automático, ruta de navegación, botón configurable, archivo adjunto,
   contenido insertado (YouTube, Vimeo, Figma), bloque sincronizado y bloque de IA.
@@ -213,6 +217,12 @@ y las funciones listadas; cualquier otra cosa se rechaza.
 **El HTML se sanea.** Lo que se pega en los bloques de texto pasa por un
 saneamiento que quita `script`, `iframe` y atributos de evento; los bloques HTML
 se ejecutan aislados en un `iframe` con `sandbox`.
+
+**Los archivos subidos viven en IndexedDB.** No dentro del JSON del espacio: así
+el estado guardado sigue siendo pequeño y no revienta la cuota de
+`localStorage`. Las fotos de más de 2000 px se reescalan antes de guardarse, los
+GIF y SVG se dejan intactos, y al exportar el espacio las imágenes viajan dentro
+del JSON.
 
 **Es una demo local.** No hay servidor ni colaboración en tiempo real: las personas
 del espacio son datos de ejemplo guardados en el navegador.

@@ -27,6 +27,11 @@ No necesita instalación: todo el estado vive en `localStorage` del navegador.
 - Tipos: texto, encabezados 1–3, viñetas, numeradas, tareas, desplegable,
   cita, destacado, divisor, código, imagen, marcador web, **bloque HTML**,
   base de datos y subpágina.
+- **Imágenes** con el selector completo de Notion: subir desde el equipo,
+  arrastrar y soltar sobre la página, pegar con `⌘/Ctrl + V`, insertar por
+  enlace o reutilizar una subida anterior. Se redimensionan arrastrando las
+  asas laterales, se alinean y llevan pie de foto. La portada y el icono de
+  página aceptan lo mismo.
 - Menú `/` con búsqueda en vivo y navegación por teclado.
 - Atajos de Markdown: `# `, `## `, `### `, `- `, `1. `, `[] `, `> `, `" `,
   ` ``` `, `--- `.
@@ -138,22 +143,27 @@ trimestrales y Seguimiento de bugs.
 index.html
 css/  tokens.css  base.css  layout.css  editor.css  database.css
       overlays.css  pro.css
-js/   utils.js  icons.js  templates.js  store.js  charts.js  plans.js
-      menus.js  collab.js  history.js  ai.js  agents.js  database.js
-      blocks.js  modals.js  sidebar.js  app.js
+js/   utils.js  icons.js  templates.js  store.js  assets.js  charts.js
+      plans.js  menus.js  collab.js  history.js  ai.js  agents.js
+      database.js  blocks.js  modals.js  sidebar.js  app.js
 ```
 
 `store.js` mantiene el estado (páginas, personas, espacios, comentarios,
 versiones, auditoría) y lo persiste; `blocks.js` es el editor; `database.js`
 dibuja las vistas y el motor de fórmulas, relaciones y automatizaciones;
 `ai.js` el asistente; `agents.js` skills, conexiones MCP y rutinas; `collab.js` compartir y comentarios; `history.js`
-versiones, analíticas, auditoría y exportaciones; `charts.js` las gráficas SVG;
+versiones, analíticas, auditoría y exportaciones; `charts.js` las gráficas SVG; `assets.js` el almacén de archivos y el selector de medios;
 `modals.js` buscador, plantillas, papelera, ajustes y el anuncio.
 
 ## Notas
 
 - El HTML pegado en los bloques se ejecuta dentro de un `iframe` con `sandbox`,
   y el HTML enriquecido de los bloques de texto se sanea antes de guardarse.
+- Las imágenes y archivos que subes se guardan en **IndexedDB** del navegador,
+  no dentro del JSON del espacio: así el estado sigue siendo pequeño y no se
+  llena la cuota de `localStorage`. Las fotos de más de 2000 px o 400 KB se
+  reescalan antes de guardarse; los GIF y SVG se conservan intactos. Al exportar
+  el espacio, las imágenes viajan dentro del archivo.
 - Es una demo local: no hay servidor ni colaboración en tiempo real. Las personas
   del espacio son datos de ejemplo guardados en el navegador.
 - La paleta de las gráficas está validada para visión normal y para daltonismo
