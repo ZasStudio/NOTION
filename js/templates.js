@@ -479,8 +479,16 @@ const Templates = (() => {
         ),
         h2("Empieza por aquí"),
         todo("Escribe <code>/</code> y prueba los bloques"),
-        todo("Crea una base de datos y cambia entre vistas"),
-        todo("Abre la galería de plantillas desde la barra lateral"),
+        todo("Crea una base de datos y cambia entre sus cinco vistas"),
+        todo("Pulsa <strong>IA</strong> arriba para resumir o extraer tareas"),
+        todo("Comenta un bloque desde su menú ⋮⋮ y resuelve el hilo"),
+        todo("Abre <strong>Compartir</strong> para dar permisos o publicar en la web"),
+        todo("Revisa el <strong>historial de versiones</strong> y restaura una anterior"),
+        h2("Todo desbloqueado"),
+        callout(
+          "IA, historial ilimitado, comentarios, permisos, espacios privados, automatizaciones, gráficas, analíticas y auditoría están activos. Míralos en <strong>Todo desbloqueado</strong>, abajo en la barra lateral.",
+          "🔓", "green"
+        ),
         h2("Atajos"),
         bul("<strong>⌘/Ctrl + K</strong> — buscar en el espacio"),
         bul("<strong>⌘/Ctrl + \\</strong> — mostrar u ocultar la barra lateral"),
@@ -517,12 +525,69 @@ const Templates = (() => {
     const tasks = apply(store, "task-list", null);
     const roadmap = apply(store, "project-roadmap", null);
     apply(store, "meeting-notes", roadmap.id);
-    apply(store, "roi-notes", null);
+    const roi = apply(store, "roi-notes", null);
     store.createPage({
       title: "Notas rápidas",
       icon: "⚡",
       blocks: [p("Un lugar para lo que no tiene lugar."), bul("Idea suelta"), bul("Enlace por leer")],
     });
+
+    /* --- Muestras de las funciones avanzadas --- */
+
+    // El roadmap vive en el espacio de equipo y trae gráfica y automatización
+    const teamId = store.state.teamspaces[0].id;
+    roadmap.teamspaceId = teamId;
+    roi.teamspaceId = teamId;
+
+    const rdb = roadmap.db;
+    const estado = rdb.props.find((x) => x.name === "Estado");
+    const entrega = rdb.props.find((x) => x.name === "Entrega");
+    rdb.views.push(view("Gráfica", "chart", { groupBy: estado.id }));
+    rdb.automations = [
+      {
+        id: U.uid("au"), name: "Al crear: mandar a Backlog", enabled: true,
+        when: { type: "row_created" },
+        then: { type: "set_prop", propId: estado.id, value: "Backlog" },
+      },
+      {
+        id: U.uid("au"), name: "Si está Listo: fecha de hoy", enabled: true,
+        when: { type: "prop_equals", propId: estado.id, value: "Listo" },
+        then: { type: "set_prop", propId: entrega.id, value: "hoy" },
+      },
+    ];
+    rdb.templates = [
+      { id: U.uid("t"), name: "Proyecto de diseño",
+        cells: { [rdb.props[0].id]: "Nuevo proyecto de diseño", [estado.id]: "Backlog",
+                 [rdb.props[2].id]: "Media", [rdb.props[5].id]: ["Diseño"] } },
+    ];
+
+    // La lista de tareas se relaciona con el roadmap y hace rollup de su progreso
+    const tdb = tasks.db;
+    const rel = prop("Proyecto", "relation");
+    rel.targetPageId = roadmap.id;
+    const roll = prop("Prioridad del proyecto", "rollup");
+    tdb.props.push(rel, roll);
+    roll.relationPropId = rel.id;
+    roll.fn = "count";
+    tdb.rows[0].cells[rel.id] = [rdb.rows[0].id];
+    tdb.rows[1].cells[rel.id] = [rdb.rows[2].id];
+
+    // Fórmula en las ROI Notes: proyección anual a partir del importe mensual
+    const roiDb = roi.db;
+    const mensual = roiDb.props.find((x) => x.name === "Mensual");
+    const formula = prop("Proyección 3 años", "formula");
+    formula.formula = `{${mensual.name}} * 36`;
+    roiDb.props.push(formula);
+
+    // Un comentario y una versión inicial para que el historial no nazca vacío
+    store.state.comments[home.id] = [{
+      id: U.uid("c"), blockId: home.blocks[1].id,
+      body: "Bienvenido: comenta cualquier bloque desde su menú ⋮⋮ y resuelve el hilo cuando esté listo.",
+      authorId: "u_ana", at: new Date(Date.now() - 36e5).toISOString(),
+      resolved: false, replies: [],
+    }];
+    store.recordVersion(home.id, "Creación inicial");
+    store.audit("workspace.create", "Espacio creado con contenido de ejemplo");
 
     store.state.favorites = [home.id, tasks.id];
     store.state.openId = home.id;

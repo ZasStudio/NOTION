@@ -116,6 +116,15 @@ const Sidebar = (() => {
     return frag;
   }
 
+  function newTeamspace(isPrivate) {
+    const name = prompt(isPrivate ? "Nombre del espacio privado:" : "Nombre del espacio de equipo:");
+    if (!name) return;
+    const ts = Store.createTeamspace({ name, isPrivate });
+    Store.audit("teamspace.create", `${name}${isPrivate ? " (privado)" : ""}`);
+    U.toast(`Espacio «${name}» creado`);
+    return ts;
+  }
+
   function section(title, { onAdd, collapsedKey } = {}) {
     const st = Store.state;
     const collapsed = collapsedKey ? !!st[collapsedKey] : false;
@@ -192,6 +201,13 @@ const Sidebar = (() => {
           if (home) Store.open(home.id);
         },
       }),
+      U.el("button", {
+        class: "sb-item", html: ICONS.sparkle + "<span>Notion AI</span><kbd>⌘J</kbd>",
+        onclick: () => {
+          const page = Store.getPage(st.openId);
+          if (page) AI.open({ page, anchor: U.$("#topbar") });
+        },
+      }),
       U.el("button", { class: "sb-item", html: ICONS.settings + "<span>Ajustes</span>", onclick: Modals.settings })
     );
 
@@ -201,6 +217,97 @@ const Sidebar = (() => {
       scroll.append(section("Favoritos"));
       favs.forEach((p) => scroll.append(treeRow(p, 0)));
     }
+
+    /* Espacios de equipo */
+    scroll.append(
+      U.el(
+        "div", { class: "sb-section" },
+        U.el("span", { class: "sb-section-title", text: "Espacios de equipo" }),
+        U.el("button", {
+          class: "icon-btn", html: ICONS.plus, title: "Nuevo espacio de equipo",
+          onclick: (e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            Menus.open({
+              x: r.left - 180, y: r.bottom + 4, width: 250,
+              items: [
+                { type: "label", label: "Crear espacio de equipo" },
+                { label: "Espacio abierto", sub: "Cualquiera del espacio puede unirse", icon: ICONS.people,
+                  onClick: () => newTeamspace(false) },
+                { label: "Espacio privado", sub: "Solo para los miembros que invites", icon: ICONS.lock,
+                  onClick: () => newTeamspace(true) },
+              ],
+            });
+          },
+        })
+      )
+    );
+
+    st.teamspaces.forEach((ts) => {
+      const open = st.expanded["ts:" + ts.id] !== false;
+      const row = U.el(
+        "div", { class: "tree-row ts-row" },
+        U.el("button", {
+          class: "tree-toggle" + (open ? " open" : ""), html: ICONS.chevronRight,
+          onclick: () => { st.expanded["ts:" + ts.id] = !open; Store.emit(); },
+        }),
+        U.el("span", { class: "tree-emoji", text: ts.icon }),
+        U.el("span", { class: "tree-label", text: ts.name }),
+        ts.private ? U.el("span", { class: "ts-lock", html: ICONS.lock, title: "Privado" }) : null,
+        U.el(
+          "span", { class: "tree-actions" },
+          U.el("button", {
+            class: "icon-btn", html: ICONS.dots,
+            onclick: (e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              Menus.open({
+                x: r.left - 200, y: r.bottom + 4, width: 240,
+                items: [
+                  { label: "Renombrar", icon: ICONS.rename, onClick: () => {
+                      const n = prompt("Nombre del espacio:", ts.name);
+                      if (n) { ts.name = n; Store.emit(); }
+                    } },
+                  { label: ts.private ? "Hacerlo abierto" : "Hacerlo privado", icon: ICONS.lock,
+                    onClick: () => {
+                      ts.private = !ts.private;
+                      Store.audit("teamspace.privacy", `${ts.name} → ${ts.private ? "privado" : "abierto"}`);
+                      Store.emit();
+                    } },
+                  { label: "Miembros del espacio", icon: ICONS.people, onClick: Collab.peopleModal },
+                  { type: "separator" },
+                  { label: "Eliminar espacio", icon: ICONS.trash, danger: true,
+                    onClick: () => {
+                      if (confirm(`¿Eliminar «${ts.name}»? Sus páginas pasan a Privado.`))
+                        Store.deleteTeamspace(ts.id);
+                    } },
+                ],
+              });
+            },
+          }),
+          U.el("button", {
+            class: "icon-btn", html: ICONS.plus, title: "Nueva página aquí",
+            onclick: () => Store.open(Store.createPage({ title: "", teamspaceId: ts.id }).id),
+          })
+        )
+      );
+      row.addEventListener("dragover", (e) => { if (dragPageId) { e.preventDefault(); row.classList.add("drop-target"); } });
+      row.addEventListener("dragleave", () => row.classList.remove("drop-target"));
+      row.addEventListener("drop", (e) => {
+        e.preventDefault();
+        row.classList.remove("drop-target");
+        if (!dragPageId) return;
+        Store.movePage(dragPageId, null);
+        Store.getPage(dragPageId).teamspaceId = ts.id;
+        dragPageId = null;
+        Store.emit();
+      });
+      scroll.append(row);
+      if (open) {
+        const pages = Store.rootPagesOf(ts.id);
+        if (!pages.length)
+          scroll.append(U.el("div", { class: "tree-empty", text: "Arrastra páginas aquí", style: { marginLeft: "22px" } }));
+        pages.forEach((p) => scroll.append(treeRow(p, 1)));
+      }
+    });
 
     /* Privado */
     scroll.append(
@@ -214,10 +321,12 @@ const Sidebar = (() => {
         e.preventDefault();
         if (!dragPageId) return;
         Store.movePage(dragPageId, null);
+        Store.getPage(dragPageId).teamspaceId = null;
         dragPageId = null;
+        Store.emit();
       },
     });
-    Store.childrenOf(null).forEach((p) => rootDrop.append(treeRow(p, 0)));
+    Store.rootPagesOf(null).forEach((p) => rootDrop.append(treeRow(p, 0)));
     scroll.append(rootDrop);
 
     scroll.append(
@@ -234,9 +343,28 @@ const Sidebar = (() => {
       U.el(
         "div", { class: "sb-foot" },
         U.el("button", { class: "sb-item", html: ICONS.template + "<span>Plantillas</span>", onclick: () => Modals.templates() }),
-        U.el("button", { class: "sb-item", html: ICONS.import + "<span>Importar</span>", onclick: Modals.settings }),
+        U.el("button", { class: "sb-item", html: ICONS.people + "<span>Personas</span>", onclick: Collab.peopleModal }),
+        U.el("button", {
+          class: "sb-item", html: ICONS.settings + "<span>Administración</span>",
+          onclick: (e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            Menus.open({
+              x: r.left + 20, y: r.top - 8, width: 260,
+              items: [
+                { type: "label", label: "Herramientas del espacio" },
+                { label: "Registro de auditoría", icon: ICONS.list, onClick: History.auditLog },
+                { label: "Búsqueda de contenido", icon: ICONS.search, onClick: History.adminSearch },
+                { label: "Exportar todo el espacio", icon: ICONS.import, onClick: History.bulkExport },
+                { label: "Ajustes de Notion AI", icon: ICONS.sparkle, onClick: AI.settings },
+                { type: "separator" },
+                { label: "Funciones incluidas", icon: ICONS.check, onClick: Plans.features },
+              ],
+            });
+          },
+        }),
         U.el("button", { class: "sb-item", html: ICONS.trash + "<span>Papelera</span>", onclick: Modals.trash }),
-        U.el("button", { class: "sb-item", html: ICONS.sparkle + "<span>Novedades</span>", onclick: Modals.cooking })
+        U.el("button", { class: "sb-item", html: ICONS.sparkle + "<span>Novedades</span>", onclick: Modals.cooking }),
+        Plans.badge()
       )
     );
   }

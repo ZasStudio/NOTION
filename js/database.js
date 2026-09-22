@@ -11,6 +11,22 @@ const Database = (() => {
     { id: "person", name: "Persona", icon: ICONS.people },
     { id: "checkbox", name: "Casilla", icon: ICONS.todo },
     { id: "url", name: "URL", icon: ICONS.link },
+    { id: "formula", name: "Fórmula", icon: ICONS.code },
+    { id: "relation", name: "Relación", icon: ICONS.mcp },
+    { id: "rollup", name: "Rollup", icon: ICONS.sort },
+    { id: "created", name: "Fecha de creación", icon: ICONS.clock },
+    { id: "edited", name: "Última edición", icon: ICONS.clock },
+  ];
+
+  const OPERATORS = [
+    { id: "contains", name: "contiene" },
+    { id: "not_contains", name: "no contiene" },
+    { id: "is", name: "es" },
+    { id: "is_not", name: "no es" },
+    { id: "empty", name: "está vacío" },
+    { id: "not_empty", name: "no está vacío" },
+    { id: "gt", name: "mayor que" },
+    { id: "lt", name: "menor que" },
   ];
 
   const VIEW_TYPES = [
@@ -19,6 +35,7 @@ const Database = (() => {
     { id: "gallery", name: "Galería", icon: ICONS.gallery },
     { id: "list", name: "Lista", icon: ICONS.list },
     { id: "calendar", name: "Calendario", icon: ICONS.calendar },
+    { id: "chart", name: "Gráfica", icon: ICONS.board },
   ];
 
   let page = null, db = null, block = null, host = null;
@@ -27,6 +44,82 @@ const Database = (() => {
 
   const titleProp = () => db.props.find((p) => p.type === "title") || db.props[0];
   const activeView = () => db.views.find((v) => v.id === db.activeView) || db.views[0];
+
+  /* --------------------- Fórmulas, relaciones y rollups ------------------- */
+
+  // Sólo se evalúan expresiones con números, operadores y funciones permitidas.
+  const SAFE_FORMULA = /^[\d\s+\-*/().,%<>=?:!&|"']*(?:(?:round|abs|min|max|floor|ceil|if|length)\s*\()?[\s\S]*$/;
+  const FORBIDDEN = /(=>|\bfunction\b|\bthis\b|\bwindow\b|\bdocument\b|\bfetch\b|\[|\]|`|\$\{)/;
+
+  /** Evalúa `{Propiedad} * 12` u otras expresiones simples sobre una fila. */
+  function evalFormula(expr, row, props) {
+    if (!expr) return "";
+    let code = expr;
+    for (const p of props) {
+      const raw = row.cells[p.id];
+      const value =
+        p.type === "number" ? Number(raw) || 0
+        : p.type === "checkbox" ? (raw ? 1 : 0)
+        : JSON.stringify(raw === undefined || raw === null ? "" : String(Array.isArray(raw) ? raw.join(", ") : raw));
+      code = code.split(`{${p.name}}`).join(String(value));
+    }
+    if (FORBIDDEN.test(code) || !SAFE_FORMULA.test(code)) return "⚠︎ expresión no permitida";
+    try {
+      // eslint-disable-next-line no-new-func
+      const fn = new Function(
+        "round", "abs", "min", "max", "floor", "ceil", "iff", "length",
+        `"use strict"; return (${code.replace(/\bif\s*\(/g, "iff(")});`
+      );
+      const out = fn(Math.round, Math.abs, Math.min, Math.max, Math.floor, Math.ceil,
+        (c, a, b) => (c ? a : b), (v) => String(v).length);
+      return typeof out === "number" && !isFinite(out) ? "—" : out;
+    } catch {
+      return "⚠︎ error";
+    }
+  }
+
+  /** Base de datos de destino de una propiedad de relación. */
+  const relationDb = (prop) => {
+    const target = prop.targetPageId ? Store.getPage(prop.targetPageId) : null;
+    return target && target.db ? { page: target, db: target.db } : null;
+  };
+
+  const relationTitle = (targetDb, rowId) => {
+    const tp = targetDb.props.find((p) => p.type === "title") || targetDb.props[0];
+    const row = targetDb.rows.find((r) => r.id === rowId);
+    return row ? row.cells[tp.id] || "Sin título" : "(eliminado)";
+  };
+
+  /** Calcula el valor de un rollup a partir de la relación indicada. */
+  function rollupValue(prop, row) {
+    const relProp = db.props.find((p) => p.id === prop.relationPropId);
+    if (!relProp) return "";
+    const target = relationDb(relProp);
+    if (!target) return "";
+    const ids = row.cells[relProp.id] || [];
+    const rows = target.db.rows.filter((r) => ids.includes(r.id));
+    const targetProp = target.db.props.find((p) => p.id === prop.targetPropId);
+    if (prop.fn === "count" || !targetProp) return rows.length;
+    const nums = rows.map((r) => Number(r.cells[targetProp.id]) || 0);
+    switch (prop.fn) {
+      case "sum": return nums.reduce((a, b) => a + b, 0);
+      case "avg": return nums.length ? Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 100) / 100 : 0;
+      case "min": return nums.length ? Math.min(...nums) : 0;
+      case "max": return nums.length ? Math.max(...nums) : 0;
+      default: return rows.map((r) => r.cells[targetProp.id]).join(", ");
+    }
+  }
+
+  /** Valor mostrado de cualquier propiedad (usado por filtros, orden y gráficas). */
+  function valueOf(row, prop) {
+    switch (prop.type) {
+      case "formula": return evalFormula(prop.formula, row, db.props);
+      case "rollup": return rollupValue(prop, row);
+      case "created": return row.createdAt || "";
+      case "edited": return row.updatedAt || row.createdAt || "";
+      default: return row.cells[prop.id];
+    }
+  }
 
   function optionOf(prop, name) {
     if (!name) return null;
@@ -56,11 +149,183 @@ const Database = (() => {
     Store.open(row.pageId);
   }
 
-  function addRow(preset = {}) {
+  function addRow(preset = {}, { silent = false } = {}) {
     Store.snapshot();
-    db.rows.push({ id: U.uid("r"), cells: { ...preset }, pageId: null });
+    const row = {
+      id: U.uid("r"), cells: { ...preset }, pageId: null,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    };
+    db.rows.push(row);
+    runAutomations(row, "row_created");
     dirty();
-    repaint();
+    if (!silent) repaint();
+    return row;
+  }
+
+  /* ---------------------------- Automatizaciones --------------------------- */
+  /**
+   * Reglas: { id, when: {type:'row_created'|'prop_equals', propId, value},
+   *           then: {type:'set_prop'|'check'|'comment', propId, value} }
+   */
+  function runAutomations(row, trigger, changedPropId) {
+    const rules = db.automations || [];
+    let fired = 0;
+    for (const rule of rules) {
+      if (!rule.enabled) continue;
+      const w = rule.when || {};
+      let match = false;
+      if (trigger === "row_created" && w.type === "row_created") match = true;
+      if (trigger === "prop_changed" && w.type === "prop_equals") {
+        const val = row.cells[w.propId];
+        match = String(Array.isArray(val) ? val.join(",") : val ?? "") === String(w.value ?? "");
+        if (changedPropId && w.propId !== changedPropId) match = false;
+      }
+      if (!match) continue;
+
+      const t = rule.then || {};
+      if (t.type === "set_prop" && t.propId) {
+        const prop = db.props.find((p) => p.id === t.propId);
+        if (prop) {
+          row.cells[t.propId] =
+            prop.type === "multi_select" ? [t.value]
+            : prop.type === "checkbox" ? true
+            : prop.type === "date" && t.value === "hoy" ? U.today()
+            : prop.type === "number" ? Number(t.value) || 0
+            : t.value;
+        }
+      } else if (t.type === "comment" && page) {
+        Store.addComment(page.id, block?.id || "", `⚙︎ ${t.value || "Automatización ejecutada"}`);
+      }
+      fired++;
+      History.log("db.automation", `${rule.name || "Regla"} en «${db.name}»`);
+    }
+    if (fired) Store.save();
+    return fired;
+  }
+
+  function automationsModal() {
+    db.automations = db.automations || [];
+    const list = U.el("div", { class: "auto-list" });
+
+    const paint2 = () => {
+      list.innerHTML = "";
+      if (!db.automations.length)
+        list.append(U.el("div", { class: "cm-empty", text: "Sin automatizaciones. Crea una para que la base reaccione sola." }));
+      db.automations.forEach((rule, i) => {
+        const whenProp = db.props.find((p) => p.id === rule.when?.propId);
+        const thenProp = db.props.find((p) => p.id === rule.then?.propId);
+        list.append(
+          U.el(
+            "div", { class: "auto-rule" },
+            U.el("button", {
+              class: "switch" + (rule.enabled ? " is-on" : ""),
+              onclick: (e) => { rule.enabled = !rule.enabled; e.currentTarget.classList.toggle("is-on", rule.enabled); dirty(); },
+            }),
+            U.el(
+              "div", { class: "auto-body" },
+              U.el("input", {
+                class: "auto-name", value: rule.name || "Regla sin nombre",
+                oninput: (e) => { rule.name = e.target.value; dirty(); },
+              }),
+              U.el("div", { class: "auto-desc", text:
+                (rule.when?.type === "row_created"
+                  ? "Cuando se crea una fila"
+                  : `Cuando «${whenProp?.name || "?"}» es «${rule.when?.value ?? ""}»`) +
+                " → " +
+                (rule.then?.type === "comment"
+                  ? `comentar «${rule.then.value}»`
+                  : `poner «${thenProp?.name || "?"}» = «${rule.then?.value ?? ""}»`) })
+            ),
+            U.el("button", {
+              class: "icon-btn", html: ICONS.settings, title: "Configurar",
+              onclick: (e) => editRule(rule, e.currentTarget),
+            }),
+            U.el("button", {
+              class: "icon-btn", html: ICONS.trash, title: "Eliminar",
+              onclick: () => { db.automations.splice(i, 1); dirty(); paint2(); },
+            })
+          )
+        );
+      });
+    };
+
+    function editRule(rule, anchor) {
+      const r = anchor.getBoundingClientRect();
+      Menus.open({
+        x: r.left - 220, y: r.bottom + 4, width: 260,
+        items: [
+          { type: "label", label: "Cuándo" },
+          { label: "Al crear una fila", active: rule.when?.type === "row_created",
+            onClick: () => { rule.when = { type: "row_created" }; dirty(); paint2(); } },
+          ...db.props.filter((p) => ["select", "checkbox", "status"].includes(p.type)).map((p) => ({
+            label: `«${p.name}» cambia a…`,
+            onClick: (e) => {
+              const rr = e.currentTarget.getBoundingClientRect();
+              Menus.open({
+                x: rr.right + 4, y: rr.top, width: 220,
+                items: (p.options.length ? p.options.map((o) => o.name) : ["true"]).map((name) => ({
+                  label: name,
+                  onClick: () => { rule.when = { type: "prop_equals", propId: p.id, value: name }; dirty(); paint2(); },
+                })),
+              });
+              return true;
+            },
+          })),
+          { type: "separator" },
+          { type: "label", label: "Entonces" },
+          ...db.props.map((p) => ({
+            label: `Poner «${p.name}» =…`,
+            onClick: (e) => {
+              const rr = e.currentTarget.getBoundingClientRect();
+              const choices = p.options.length ? p.options.map((o) => o.name)
+                : p.type === "date" ? ["hoy"] : p.type === "checkbox" ? ["true"] : ["(escribir)"];
+              Menus.open({
+                x: rr.right + 4, y: rr.top, width: 220,
+                items: choices.map((name) => ({
+                  label: name,
+                  onClick: () => {
+                    const value = name === "(escribir)" ? prompt("Valor:") || "" : name;
+                    rule.then = { type: "set_prop", propId: p.id, value };
+                    dirty(); paint2();
+                  },
+                })),
+              });
+              return true;
+            },
+          })),
+          { label: "Dejar un comentario…", icon: ICONS.comment, onClick: () => {
+              const value = prompt("Texto del comentario:", "Revisar este registro");
+              if (value) { rule.then = { type: "comment", value }; dirty(); paint2(); }
+            } },
+        ],
+      });
+    }
+
+    const card = U.el(
+      "div", { class: "modal", style: { width: "min(620px, 94vw)" } },
+      U.el("div", { class: "tpl-head" },
+        U.el("h2", { text: "Automatizaciones" }),
+        U.el("span", { class: "share-mail", text: db.name }),
+        U.el("button", { class: "icon-btn", html: ICONS.x, onclick: () => modal.close() })),
+      list,
+      U.el("div", { class: "features-foot" },
+        U.el("span", { text: "Se ejecutan al crear filas o al cambiar una propiedad." }),
+        U.el("button", {
+          class: "btn btn-primary", text: "Nueva regla",
+          onclick: () => {
+            const statusProp = db.props.find((p) => p.type === "select") || db.props[1] || db.props[0];
+            db.automations.push({
+              id: U.uid("au"), name: "Nueva regla", enabled: true,
+              when: { type: "row_created" },
+              then: { type: "set_prop", propId: statusProp.id, value: statusProp.options?.[0]?.name || "" },
+            });
+            dirty(); paint2();
+          },
+        }))
+    );
+    paint2();
+    const modal = Modals.overlay(card);
+    return modal;
   }
 
   function deleteRow(id) {
@@ -83,7 +348,9 @@ const Database = (() => {
 
     const commit = (v) => {
       row.cells[prop.id] = v;
+      row.updatedAt = new Date().toISOString();
       if (prop.type === "title" && row.pageId) Store.updatePage(row.pageId, { title: v });
+      runAutomations(row, "prop_changed", prop.id);
       dirty();
     };
 
@@ -220,6 +487,61 @@ const Database = (() => {
         return cell;
       }
 
+      case "formula":
+      case "rollup": {
+        const v = valueOf(row, prop);
+        return U.el("div", { class: "db-cell db-cell-computed", title: "Calculado automáticamente",
+          text: v === "" || v === undefined ? "" : String(v) });
+      }
+
+      case "created":
+      case "edited":
+        return U.el("div", { class: "db-cell db-cell-computed",
+          text: U.formatDate(valueOf(row, prop) || page.createdAt) });
+
+      case "relation": {
+        const target = relationDb(prop);
+        const ids = Array.isArray(value) ? value : [];
+        const cell = U.el(
+          "div",
+          {
+            class: "db-cell",
+            onclick: (e) => {
+              e.stopPropagation();
+              if (!target) {
+                pickRelationTarget(prop);
+                return;
+              }
+              const r = cell.getBoundingClientRect();
+              const tp = target.db.props.find((p) => p.type === "title") || target.db.props[0];
+              Menus.open({
+                x: r.left, y: r.bottom + 2, width: 260, searchable: true,
+                placeholder: `Buscar en ${target.page.title}…`,
+                items: [
+                  { type: "label", label: `Relacionar con ${target.page.title}` },
+                  ...target.db.rows.map((tr) => ({
+                    label: U.escapeHtml(tr.cells[tp.id] || "Sin título"),
+                    active: ids.includes(tr.id),
+                    onClick: () => {
+                      const next = ids.includes(tr.id) ? ids.filter((x) => x !== tr.id) : [...ids, tr.id];
+                      commit(next);
+                      repaint();
+                      return true;
+                    },
+                  })),
+                  { type: "separator" },
+                  { label: "Cambiar base de datos…", icon: ICONS.table, onClick: () => pickRelationTarget(prop) },
+                ],
+              });
+            },
+          },
+          ...(target ? ids.map((id) =>
+                U.el("span", { class: "tag tag-rel", text: relationTitle(target.db, id) }))
+              : [U.el("span", { class: "db-hint", text: "Elegir base de datos…" })])
+        );
+        return cell;
+      }
+
       default: {
         // texto / número / título
         const cell = U.el("div", {
@@ -245,6 +567,23 @@ const Database = (() => {
         return cell;
       }
     }
+  }
+
+  /** Elige a qué base de datos apunta una propiedad de relación. */
+  function pickRelationTarget(prop) {
+    const targets = Object.values(Store.state.pages).filter((p) => !p.deleted && p.db && p.id !== page.id);
+    if (!targets.length) return U.toast("Crea otra página con base de datos para poder relacionarlas");
+    Menus.open({
+      x: window.innerWidth / 2 - 120, y: 160, width: 260, searchable: true,
+      items: [
+        { type: "label", label: "Relacionar con…" },
+        ...targets.map((p) => ({
+          label: `${p.icon || "📄"} ${U.escapeHtml(p.title || "Sin título")}`,
+          active: prop.targetPageId === p.id,
+          onClick: () => { prop.targetPageId = p.id; dirty(); repaint(); },
+        })),
+      ],
+    });
   }
 
   /* -------------------------------- Tabla --------------------------------- */
@@ -278,6 +617,73 @@ const Database = (() => {
                     label: t.name, icon: t.icon, active: prop.type === t.id,
                     onClick: () => { prop.type = t.id; dirty(); repaint(); },
                   })),
+                  { type: "separator" },
+                  prop.type === "formula" && {
+                    label: "Editar fórmula…", icon: ICONS.code,
+                    onClick: () => {
+                      const expr = prompt(
+                        `Fórmula para «${prop.name}». Usa {Propiedad} y + - * / round() if():`,
+                        prop.formula || "{" + (db.props.find((p) => p.type === "number")?.name || "Número") + "} * 12"
+                      );
+                      if (expr !== null) { prop.formula = expr; dirty(); repaint(); }
+                    },
+                  },
+                  prop.type === "relation" && {
+                    label: "Base de datos relacionada…", icon: ICONS.table,
+                    onClick: () => pickRelationTarget(prop),
+                  },
+                  prop.type === "rollup" && {
+                    label: "Configurar rollup…", icon: ICONS.sort,
+                    onClick: (e) => {
+                      const r = e.currentTarget.getBoundingClientRect();
+                      const rels = db.props.filter((p) => p.type === "relation");
+                      Menus.open({
+                        x: r.right + 4, y: r.top, width: 240,
+                        items: rels.length
+                          ? [
+                              { type: "label", label: "A través de la relación" },
+                              ...rels.map((rel) => ({
+                                label: rel.name, active: prop.relationPropId === rel.id,
+                                onClick: (ev) => {
+                                  prop.relationPropId = rel.id;
+                                  const target = relationDb(rel);
+                                  const rr = ev.currentTarget.getBoundingClientRect();
+                                  Menus.open({
+                                    x: rr.right + 4, y: rr.top, width: 230,
+                                    items: [
+                                      { type: "label", label: "Calcular" },
+                                      { label: "Conteo", active: prop.fn === "count",
+                                        onClick: () => { prop.fn = "count"; dirty(); repaint(); } },
+                                      ...(target ? target.db.props
+                                        .filter((tp2) => ["number", "formula"].includes(tp2.type))
+                                        .flatMap((tp2) => ["sum", "avg", "min", "max"].map((fn) => ({
+                                          label: `${fn} de ${tp2.name}`,
+                                          active: prop.fn === fn && prop.targetPropId === tp2.id,
+                                          onClick: () => { prop.fn = fn; prop.targetPropId = tp2.id; dirty(); repaint(); },
+                                        }))) : []),
+                                    ],
+                                  });
+                                  return true;
+                                },
+                              })),
+                            ]
+                          : [{ type: "label", label: "Crea antes una propiedad de relación" }],
+                      });
+                      return true;
+                    },
+                  },
+                  {
+                    label: "Rellenar con IA", icon: ICONS.sparkle,
+                    sub: AI.hasKey() ? "con Claude" : "modo local",
+                    onClick: async () => {
+                      if (["formula", "rollup", "created", "edited", "title"].includes(prop.type))
+                        return U.toast("Esta propiedad se calcula sola");
+                      U.toast("Rellenando con IA…");
+                      const done = await AI.autofill(db, prop, visibleRows().filter((r) => !r.cells[prop.id]));
+                      repaint();
+                      U.toast(done ? `${done} celdas rellenadas` : "Nada que rellenar");
+                    },
+                  },
                   { type: "separator" },
                   { label: "Ordenar ascendente", icon: ICONS.sort, onClick: () => sortBy(prop.id, 1) },
                   { label: "Ordenar descendente", icon: ICONS.sort, onClick: () => sortBy(prop.id, -1) },
@@ -589,16 +995,280 @@ const Database = (() => {
     );
   }
 
-  /* ------------------------------- Filtro/búsqueda ------------------------- */
-  let query = "";
-  function visibleRows() {
-    if (!query.trim()) return db.rows;
-    const q = query.toLowerCase();
-    return db.rows.filter((r) =>
-      Object.values(r.cells).some((v) =>
-        String(Array.isArray(v) ? v.join(" ") : v).toLowerCase().includes(q)
-      )
+  /* --------------------------- Plantillas de fila -------------------------- */
+  function templatesModal() {
+    db.templates = db.templates || [];
+    const list = U.el("div", { class: "auto-list" });
+
+    const paint2 = () => {
+      list.innerHTML = "";
+      if (!db.templates.length)
+        list.append(U.el("div", { class: "cm-empty", text: "Guarda una fila como plantilla para reutilizar sus valores." }));
+      db.templates.forEach((t, i) =>
+        list.append(
+          U.el(
+            "div", { class: "auto-rule" },
+            U.el("span", { html: ICONS.template }),
+            U.el(
+              "div", { class: "auto-body" },
+              U.el("input", {
+                class: "auto-name", value: t.name,
+                oninput: (e) => { t.name = e.target.value; dirty(); },
+              }),
+              U.el("div", { class: "auto-desc", text: db.props
+                .filter((p) => t.cells[p.id])
+                .map((p) => `${p.name}: ${Array.isArray(t.cells[p.id]) ? t.cells[p.id].join(", ") : t.cells[p.id]}`)
+                .join(" · ") || "Sin valores" })
+            ),
+            U.el("button", { class: "btn", text: "Usar", onclick: () => { addRow({ ...t.cells }); modal.close(); } }),
+            U.el("button", {
+              class: "icon-btn", html: ICONS.trash,
+              onclick: () => { db.templates.splice(i, 1); dirty(); paint2(); },
+            })
+          )
+        )
+      );
+    };
+
+    const card = U.el(
+      "div", { class: "modal", style: { width: "min(600px, 94vw)" } },
+      U.el("div", { class: "tpl-head" },
+        U.el("h2", { text: "Plantillas de fila" }),
+        U.el("button", { class: "icon-btn", html: ICONS.x, onclick: () => modal.close() })),
+      list,
+      U.el("div", { class: "features-foot" },
+        U.el("span", { text: "Crea filas nuevas con valores ya rellenados." }),
+        U.el("button", {
+          class: "btn btn-primary", text: "Guardar fila actual como plantilla",
+          onclick: () => {
+            const source = visibleRows()[0];
+            if (!source) return U.toast("No hay filas que guardar");
+            const tp = titleProp();
+            db.templates.push({
+              id: U.uid("t"), name: source.cells[tp.id] || "Plantilla",
+              cells: { ...source.cells },
+            });
+            dirty(); paint2();
+          },
+        }))
     );
+    paint2();
+    const modal = Modals.overlay(card);
+    return modal;
+  }
+
+  /* ------------------------------- Gráfica --------------------------------- */
+  function renderChart(viewCfg) {
+    const groupProp =
+      db.props.find((p) => p.id === viewCfg.groupBy) ||
+      db.props.find((p) => ["select", "multi_select", "person"].includes(p.type)) ||
+      db.props[0];
+    const measureProp = db.props.find((p) => p.id === viewCfg.measureProp);
+    const rows = visibleRows();
+
+    const buckets = new Map();
+    rows.forEach((r) => {
+      const raw = valueOf(r, groupProp);
+      const keys = Array.isArray(raw) ? (raw.length ? raw : ["Sin valor"]) : [raw || "Sin valor"];
+      keys.forEach((k) => {
+        const add = measureProp ? Number(valueOf(r, measureProp)) || 0 : 1;
+        buckets.set(String(k), (buckets.get(String(k)) || 0) + add);
+      });
+    });
+
+    const data = [...buckets.entries()].map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
+
+    const config = U.el(
+      "div", { class: "chart-config" },
+      U.el("button", {
+        class: "btn", html: ICONS.board + `<span>Agrupar por ${U.escapeHtml(groupProp?.name || "—")}</span>`,
+        onclick: (e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          Menus.open({
+            x: r.left, y: r.bottom + 4, width: 220,
+            items: db.props.map((p) => ({
+              label: p.name, active: p.id === groupProp?.id,
+              onClick: () => { viewCfg.groupBy = p.id; dirty(); repaint(); },
+            })),
+          });
+        },
+      }),
+      U.el("button", {
+        class: "btn", html: ICONS.sort + `<span>${measureProp ? "Suma de " + U.escapeHtml(measureProp.name) : "Conteo de registros"}</span>`,
+        onclick: (e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          Menus.open({
+            x: r.left, y: r.bottom + 4, width: 220,
+            items: [
+              { label: "Conteo de registros", active: !measureProp,
+                onClick: () => { delete viewCfg.measureProp; dirty(); repaint(); } },
+              ...db.props.filter((p) => ["number", "formula", "rollup"].includes(p.type)).map((p) => ({
+                label: "Suma de " + p.name, active: p.id === measureProp?.id,
+                onClick: () => { viewCfg.measureProp = p.id; dirty(); repaint(); },
+              })),
+            ],
+          });
+        },
+      })
+    );
+
+    return U.el(
+      "div", { class: "db-chart" },
+      config,
+      Charts.bars(data, { height: 240 }),
+      U.el("details", { class: "chart-details" },
+        U.el("summary", { text: "Ver como tabla" }),
+        Charts.table(data, { labelHead: groupProp?.name || "Grupo", valueHead: measureProp ? measureProp.name : "Registros" }))
+    );
+  }
+
+  /* --------------------- Búsqueda, filtros y ordenación -------------------- */
+  let query = "";
+
+  function matchesFilter(row, f) {
+    const prop = db.props.find((p) => p.id === f.propId);
+    if (!prop) return true;
+    const raw = valueOf(row, prop);
+    const value = Array.isArray(raw) ? raw.join(", ") : raw === undefined || raw === null ? "" : String(raw);
+    const needle = String(f.value ?? "");
+    switch (f.op) {
+      case "contains": return value.toLowerCase().includes(needle.toLowerCase());
+      case "not_contains": return !value.toLowerCase().includes(needle.toLowerCase());
+      case "is": return value.toLowerCase() === needle.toLowerCase();
+      case "is_not": return value.toLowerCase() !== needle.toLowerCase();
+      case "empty": return !value;
+      case "not_empty": return !!value;
+      case "gt": return Number(value) > Number(needle);
+      case "lt": return Number(value) < Number(needle);
+      default: return true;
+    }
+  }
+
+  function visibleRows() {
+    const v = activeView();
+    let rows = db.rows;
+
+    if (query.trim()) {
+      const q = query.toLowerCase();
+      rows = rows.filter((r) =>
+        db.props.some((p) => {
+          const val = valueOf(r, p);
+          return String(Array.isArray(val) ? val.join(" ") : val ?? "").toLowerCase().includes(q);
+        })
+      );
+    }
+
+    (v.filters || []).forEach((f) => (rows = rows.filter((r) => matchesFilter(r, f))));
+
+    if (v.sorts && v.sorts.length) {
+      rows = rows.slice().sort((a, b) => {
+        for (const st of v.sorts) {
+          const prop = db.props.find((p) => p.id === st.propId);
+          if (!prop) continue;
+          const x = valueOf(a, prop) ?? "", y = valueOf(b, prop) ?? "";
+          let cmp;
+          if (typeof x === "number" && typeof y === "number") cmp = x - y;
+          else cmp = String(x).localeCompare(String(y), undefined, { numeric: true });
+          if (cmp) return cmp * (st.dir === "desc" ? -1 : 1);
+        }
+        return 0;
+      });
+    }
+    return rows;
+  }
+
+  /* ------------------------------ Menús de vista --------------------------- */
+  function filterMenu(x, y) {
+    const v = activeView();
+    v.filters = v.filters || [];
+    const items = [{ type: "label", label: "Filtros activos" }];
+
+    v.filters.forEach((f, i) => {
+      const prop = db.props.find((p) => p.id === f.propId);
+      items.push({
+        label: `${U.escapeHtml(prop?.name || "?")} ${OPERATORS.find((o) => o.id === f.op)?.name || ""} ${U.escapeHtml(String(f.value ?? ""))}`,
+        icon: ICONS.filter,
+        onClick: (e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          Menus.open({
+            x: r.right + 4, y: r.top, width: 230,
+            items: [
+              ...OPERATORS.map((op) => ({
+                label: op.name, active: op.id === f.op,
+                onClick: () => { f.op = op.id; dirty(); repaint(); },
+              })),
+              { type: "separator" },
+              {
+                type: "custom",
+                node: U.el("input", {
+                  class: "menu-input", placeholder: "Valor…", value: f.value || "",
+                  oninput: (ev) => { f.value = ev.target.value; dirty(); },
+                  onkeydown: (ev) => { ev.stopPropagation(); if (ev.key === "Enter") { Menus.closeAll(); repaint(); } },
+                }),
+              },
+              { type: "separator" },
+              { label: "Quitar filtro", icon: ICONS.trash, danger: true,
+                onClick: () => { v.filters.splice(i, 1); dirty(); repaint(); } },
+            ],
+          });
+          return true;
+        },
+      });
+    });
+
+    if (!v.filters.length) items.push({ type: "label", label: "Ninguno todavía" });
+    items.push({ type: "separator" });
+    items.push({
+      label: "Añadir filtro", icon: ICONS.plus,
+      onClick: (e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        Menus.open({
+          x: r.right + 4, y: r.top, width: 220,
+          items: db.props.map((p) => ({
+            label: p.name,
+            onClick: () => {
+              v.filters.push({ propId: p.id, op: "contains", value: "" });
+              dirty(); repaint();
+            },
+          })),
+        });
+        return true;
+      },
+    });
+    Menus.open({ x, y, width: 260, items });
+  }
+
+  function sortMenu(x, y) {
+    const v = activeView();
+    v.sorts = v.sorts || [];
+    const items = [{ type: "label", label: "Orden" }];
+    v.sorts.forEach((st, i) => {
+      const prop = db.props.find((p) => p.id === st.propId);
+      items.push({
+        label: `${U.escapeHtml(prop?.name || "?")} · ${st.dir === "desc" ? "descendente" : "ascendente"}`,
+        icon: ICONS.sort,
+        onClick: () => { st.dir = st.dir === "desc" ? "asc" : "desc"; dirty(); repaint(); },
+      });
+      items.push({ label: "  Quitar", icon: ICONS.trash, danger: true,
+        onClick: () => { v.sorts.splice(i, 1); dirty(); repaint(); } });
+    });
+    if (!v.sorts.length) items.push({ type: "label", label: "Sin ordenar" });
+    items.push({ type: "separator" }, {
+      label: "Añadir orden", icon: ICONS.plus,
+      onClick: (e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        Menus.open({
+          x: r.right + 4, y: r.top, width: 220,
+          items: db.props.map((p) => ({
+            label: p.name,
+            onClick: () => { v.sorts.push({ propId: p.id, dir: "asc" }); dirty(); repaint(); },
+          })),
+        });
+        return true;
+      },
+    });
+    Menus.open({ x, y, width: 240, items });
   }
 
   /* --------------------------------- Pintado ------------------------------- */
@@ -687,6 +1357,26 @@ const Database = (() => {
           },
         }),
         U.el("button", {
+          class: "btn", html: ICONS.filter + (activeView().filters?.length ? `<span>${activeView().filters.length}</span>` : ""),
+          title: "Filtrar",
+          onclick: (e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            filterMenu(r.left - 100, r.bottom + 4);
+          },
+        }),
+        U.el("button", {
+          class: "btn", html: ICONS.sort + (activeView().sorts?.length ? `<span>${activeView().sorts.length}</span>` : ""),
+          title: "Ordenar",
+          onclick: (e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            sortMenu(r.left - 100, r.bottom + 4);
+          },
+        }),
+        U.el("button", {
+          class: "btn", html: ICONS.routines, title: "Automatizaciones",
+          onclick: automationsModal,
+        }),
+        U.el("button", {
           class: "btn", html: ICONS.dots, title: "Opciones",
           onclick: (e) => {
             const r = e.currentTarget.getBoundingClientRect();
@@ -698,17 +1388,40 @@ const Database = (() => {
                     if (n) { db.name = n; dirty(); repaint(); }
                   } },
                 { label: "Añadir propiedad", icon: ICONS.plus, onClick: addProp },
+                { label: "Automatizaciones", icon: ICONS.routines, onClick: automationsModal },
+                { label: "Plantillas de fila", icon: ICONS.template, onClick: templatesModal },
+                { type: "separator" },
                 { label: "Exportar CSV", icon: ICONS.import, onClick: exportCsv },
               ],
             });
           },
         }),
-        U.el("button", { class: "btn btn-primary", text: "Nueva", onclick: () => addRow() })
+        U.el("button", { class: "btn btn-primary", text: "Nueva", onclick: () => addRow() }),
+        U.el("button", {
+          class: "btn btn-primary btn-split", html: ICONS.chevronDown, title: "Nueva desde plantilla",
+          onclick: (e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            Menus.open({
+              x: r.right - 220, y: r.bottom + 4, width: 220,
+              items: [
+                { type: "label", label: "Plantillas de fila" },
+                ...(db.templates || []).map((t) => ({
+                  label: t.name, icon: ICONS.template,
+                  onClick: () => { addRow({ ...t.cells }); U.toast(`Fila creada desde «${t.name}»`); },
+                })),
+                ...(db.templates && db.templates.length ? [] : [{ type: "label", label: "Aún no hay plantillas" }]),
+                { type: "separator" },
+                { label: "Gestionar plantillas", icon: ICONS.settings, onClick: templatesModal },
+              ],
+            });
+          },
+        })
       )
     );
 
     let body;
-    if (v.type === "board") body = renderBoard(v);
+    if (v.type === "chart") body = renderChart(v);
+    else if (v.type === "board") body = renderBoard(v);
     else if (v.type === "gallery") body = renderGallery();
     else if (v.type === "list") body = renderList();
     else if (v.type === "calendar") body = renderCalendar(v);

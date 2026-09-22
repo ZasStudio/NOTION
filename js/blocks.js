@@ -19,8 +19,15 @@ const Editor = (() => {
     { type: "image", name: "Imagen", icon: ICONS.image, desc: "Sube o enlaza una imagen.", group: "Medios" },
     { type: "bookmark", name: "Marcador web", icon: ICONS.bookmark, desc: "Guarda un enlace con vista previa.", group: "Medios" },
     { type: "html", name: "Bloque HTML", icon: ICONS.html, desc: "Visuales interactivos en un iframe aislado.", group: "Medios" },
-    { type: "table-db", name: "Base de datos", icon: ICONS.table, desc: "Tabla, tablero, calendario y más.", group: "Bases de datos" },
+    { type: "table-db", name: "Base de datos", icon: ICONS.table, desc: "Tabla, tablero, calendario, gráfica y más.", group: "Bases de datos" },
     { type: "subpage", name: "Subpágina", icon: ICONS.doc, desc: "Crea una página anidada.", group: "Bases de datos" },
+    { type: "embed", name: "Insertar", icon: ICONS.link, desc: "YouTube, Figma, Maps y cualquier iframe.", group: "Medios" },
+    { type: "file", name: "Archivo", icon: ICONS.import, desc: "Adjunta un archivo de cualquier tamaño.", group: "Medios" },
+    { type: "toc", name: "Tabla de contenidos", icon: ICONS.list, desc: "Índice automático de los encabezados.", group: "Avanzado" },
+    { type: "breadcrumb", name: "Ruta de navegación", icon: ICONS.chevronRight, desc: "Muestra dónde está esta página.", group: "Avanzado" },
+    { type: "button", name: "Botón", icon: ICONS.routines, desc: "Un clic que inserta bloques o crea filas.", group: "Avanzado" },
+    { type: "synced", name: "Bloque sincronizado", icon: ICONS.mcp, desc: "El mismo contenido en varias páginas.", group: "Avanzado" },
+    { type: "ai", name: "Bloque de IA", icon: ICONS.sparkle, desc: "Resumen o texto generado que puedes regenerar.", group: "Avanzado" },
   ];
 
   const TURNABLE = TYPES.filter((t) =>
@@ -41,8 +48,12 @@ const Editor = (() => {
     code: "Escribe tu código…",
   };
 
+  const NON_TEXT = ["divider", "image", "html", "table-db", "subpage", "bookmark",
+    "toc", "breadcrumb", "button", "file", "embed", "synced", "ai"];
+
   let page = null;
   let root = null;
+  let selection = new Set();
 
   /* ------------------------------ Utilidades ------------------------------ */
   const blockIndex = (id) => page.blocks.findIndex((b) => b.id === id);
@@ -93,14 +104,19 @@ const Editor = (() => {
       b.src = "<!doctype html>\n<h2 style=\"font-family:sans-serif\">¡Hola desde un bloque HTML!</h2>";
       b.height = 200;
     }
+    if (type === "button" && !b.label) {
+      b.label = "Añadir tarea";
+      b.action = { type: "insert", blockType: "todo", text: "Nueva tarea" };
+    }
+    if (type === "ai" && !b.aiAction) b.aiAction = "summary";
+    if (type === "toc" || type === "breadcrumb") b.text = "";
     if (type === "subpage" && !b.pageId) {
       const child = Store.createPage({ title: "Nueva página", parentId: page.id, icon: "📄" });
       b.pageId = child.id;
     }
     touch();
     render();
-    if (!["divider", "image", "html", "table-db", "subpage", "bookmark"].includes(type))
-      focusBlock(id);
+    if (!NON_TEXT.includes(type)) focusBlock(id);
   }
 
   /* ------------------------------ Menú "/" -------------------------------- */
@@ -111,15 +127,16 @@ const Editor = (() => {
     const isOpen = () => !!node;
 
     function paint(query = "") {
-      const q = query.toLowerCase();
+      const q = query.toLowerCase().trim();
+      const norm = (s) => s.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
       items = TYPES.filter(
-        (t) => !q || t.name.toLowerCase().includes(q) || t.type.includes(q)
+        (t) => !q || norm(t.name).includes(norm(q)) || t.type.includes(q)
       );
       active = 0;
       node.innerHTML = "";
       if (!items.length) {
         node.append(U.el("div", { class: "menu-label", text: "Sin resultados" }));
-        return;
+        return 0;
       }
       let group = null;
       items.forEach((t, i) => {
@@ -146,6 +163,7 @@ const Editor = (() => {
           )
         );
       });
+      return items.length;
     }
 
     function setActive(i) {
@@ -222,6 +240,12 @@ const Editor = (() => {
     Menus.open({
       x, y, width: 240,
       items: [
+        { label: "Preguntar a la IA", icon: ICONS.sparkle,
+          sub: AI.hasKey() ? "Claude conectado" : "modo local",
+          onClick: (e) => { AI.open({ page, block, anchor: e.currentTarget }); } },
+        { label: "Comentar", icon: ICONS.comment,
+          onClick: () => Collab.commentOnBlock(page, block.id) },
+        { type: "separator" },
         { label: "Eliminar", icon: ICONS.trash, hint: "Del", danger: true,
           onClick: () => { Store.snapshot(); removeBlock(block.id); } },
         { label: "Duplicar", icon: ICONS.duplicate, hint: "⌘D", onClick: () => {
@@ -337,6 +361,10 @@ const Editor = (() => {
         },
         ondragend: () => (dragId = null),
         onclick: (e) => {
+          if (e.shiftKey || e.metaKey || e.ctrlKey) {
+            select(block.id, true);
+            return;
+          }
           const r = e.currentTarget.getBoundingClientRect();
           blockMenu(block, r.left, r.bottom + 4);
         },
@@ -345,11 +373,27 @@ const Editor = (() => {
     wrap.append(gutter);
     dragHandlers(wrap, block);
 
+    // Indicador de hilo de comentarios
+    const threads = Store.commentsOf(page.id).filter((c) => c.blockId === block.id);
+    if (threads.length) {
+      wrap.classList.add("has-comments");
+      wrap.append(
+        U.el("button", {
+          class: "block-comment-badge",
+          html: ICONS.comment + `<span>${threads.length}</span>`,
+          title: "Ver comentarios",
+          onclick: () => Collab.togglePanel(true),
+        })
+      );
+    }
+    if (selection.has(block.id)) wrap.classList.add("is-selected");
+
     /* Contenido editable estándar */
+    const locked = !!page.share?.locked;
     const makeContent = (extraClass = "") => {
       const c = U.el("div", {
         class: "block-content " + extraClass,
-        contenteditable: "true",
+        contenteditable: locked ? "false" : "true",
         spellcheck: "false",
         html: block.text || "",
         dataset: { placeholder: PLACEHOLDERS[block.type] || "" },
@@ -524,6 +568,260 @@ const Editor = (() => {
         wrap.append(renderHtmlBlock(block));
         break;
 
+      case "toc": {
+        const heads = page.blocks.filter((b) => b.type.startsWith("heading"));
+        wrap.append(
+          U.el(
+            "div", { class: "toc-block" },
+            heads.length
+              ? U.el("div", {}, ...heads.map((h) =>
+                  U.el("button", {
+                    class: "toc-link toc-" + h.type,
+                    text: U.stripHtml(h.text) || "Sin título",
+                    onclick: () => {
+                      const node = root.querySelector(`[data-id="${h.id}"]`);
+                      node?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    },
+                  })))
+              : U.el("div", { class: "db-hint", text: "Añade encabezados para construir el índice" })
+          )
+        );
+        break;
+      }
+
+      case "breadcrumb": {
+        const path = Store.pathOf(page.id);
+        wrap.append(
+          U.el("div", { class: "crumb-block" },
+            ...path.flatMap((p, i) => [
+              i ? U.el("span", { class: "crumb-sep", text: "/" }) : null,
+              U.el("button", { class: "crumb-link", text: `${p.icon || "📄"} ${p.title || "Sin título"}`,
+                onclick: () => Store.open(p.id) }),
+            ].filter(Boolean)))
+        );
+        break;
+      }
+
+      case "button": {
+        wrap.append(
+          U.el(
+            "div", { class: "btn-block" },
+            U.el("button", {
+              class: "btn btn-bordered btn-action",
+              html: ICONS.plus + `<span>${U.escapeHtml(block.label || "Botón")}</span>`,
+              onclick: () => {
+                Store.snapshot();
+                const a = block.action || {};
+                if (a.type === "row" && page.db) {
+                  page.db.rows.push({ id: U.uid("r"), cells: {}, pageId: null, createdAt: new Date().toISOString() });
+                  U.toast("Fila creada");
+                } else {
+                  const at = blockIndex(block.id) + 1;
+                  page.blocks.splice(at, 0, Store.makeBlock(a.blockType || "todo", {
+                    text: U.escapeHtml(a.text || ""),
+                  }));
+                }
+                touch();
+                render();
+              },
+            }),
+            U.el("button", {
+              class: "icon-btn", html: ICONS.settings, title: "Configurar botón",
+              onclick: (e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                Menus.open({
+                  x: r.left - 180, y: r.bottom + 4, width: 240,
+                  items: [
+                    { label: "Cambiar etiqueta…", icon: ICONS.rename, onClick: () => {
+                        const v = prompt("Etiqueta del botón:", block.label);
+                        if (v) { block.label = v; touch(); render(); }
+                      } },
+                    { type: "label", label: "Al pulsar" },
+                    ...["todo", "paragraph", "heading3", "callout"].map((t) => ({
+                      label: "Insertar " + (TYPES.find((x) => x.type === t)?.name || t),
+                      active: block.action?.blockType === t && block.action?.type !== "row",
+                      onClick: () => {
+                        const text = prompt("Texto del bloque insertado:", block.action?.text || "");
+                        block.action = { type: "insert", blockType: t, text: text || "" };
+                        touch(); render();
+                      },
+                    })),
+                    page.db && { label: "Añadir fila a la base de datos", icon: ICONS.table,
+                      active: block.action?.type === "row",
+                      onClick: () => { block.action = { type: "row" }; touch(); render(); } },
+                  ].filter(Boolean),
+                });
+              },
+            })
+          )
+        );
+        break;
+      }
+
+      case "file": {
+        if (block.fileName) {
+          wrap.append(
+            U.el(
+              "div", { class: "file-block" },
+              U.el("span", { html: ICONS.doc }),
+              U.el("div", { class: "file-meta" },
+                U.el("div", { class: "file-name", text: block.fileName }),
+                U.el("div", { class: "file-size", text: block.fileSize || "" })),
+              U.el("a", {
+                class: "btn", text: "Descargar", download: block.fileName,
+                href: block.dataUrl || "#",
+              })
+            )
+          );
+        } else {
+          wrap.append(
+            U.el("div", {
+              class: "image-empty", html: ICONS.import + "<span>Sube un archivo · sin límite de tamaño</span>",
+              onclick: () => {
+                const input = U.el("input", { type: "file" });
+                input.onchange = () => {
+                  const f = input.files[0];
+                  if (!f) return;
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    block.fileName = f.name;
+                    block.fileSize = (f.size / 1024 > 1024)
+                      ? (f.size / 1048576).toFixed(1) + " MB"
+                      : Math.max(1, Math.round(f.size / 1024)) + " KB";
+                    block.dataUrl = reader.result;
+                    touch();
+                    render();
+                  };
+                  reader.readAsDataURL(f);
+                };
+                input.click();
+              },
+            })
+          );
+        }
+        break;
+      }
+
+      case "embed": {
+        if (block.url) {
+          wrap.append(
+            U.el(
+              "div", { class: "embed-block" },
+              U.el("iframe", {
+                src: embedUrl(block.url), loading: "lazy",
+                allow: "accelerometer; clipboard-write; encrypted-media; picture-in-picture",
+                referrerpolicy: "no-referrer",
+                style: { height: (block.height || 360) + "px" },
+              }),
+              U.el("div", { class: "embed-bar" },
+                U.el("span", { class: "file-size", text: block.url }),
+                U.el("button", { class: "btn", text: "Cambiar", onclick: () => askEmbed(block) }))
+            )
+          );
+        } else {
+          wrap.append(
+            U.el("div", {
+              class: "image-empty", html: ICONS.link + "<span>Pega un enlace para insertar</span>",
+              onclick: () => askEmbed(block),
+            })
+          );
+        }
+        break;
+      }
+
+      case "synced": {
+        const source = block.sourceId ? Store.getPage(block.sourceId) : null;
+        const box = U.el("div", { class: "synced-block" });
+        box.append(
+          U.el("div", { class: "synced-bar" },
+            U.el("span", { html: ICONS.mcp }),
+            U.el("span", { text: source ? `Sincronizado desde «${source.title || "Sin título"}»` : "Elige el origen" }),
+            U.el("button", {
+              class: "btn", text: source ? "Editar original" : "Elegir origen",
+              onclick: () => {
+                if (source) return Store.open(source.id);
+                const pages = Object.values(Store.state.pages).filter((p) => !p.deleted && p.id !== page.id);
+                Menus.open({
+                  x: window.innerWidth / 2 - 120, y: 160, width: 260, searchable: true,
+                  items: pages.map((p) => ({
+                    label: `${p.icon || "📄"} ${U.escapeHtml(p.title || "Sin título")}`,
+                    onClick: () => { block.sourceId = p.id; touch(); render(); },
+                  })),
+                });
+              },
+            }))
+        );
+        if (source) {
+          const inner = U.el("div", { class: "synced-body" });
+          source.blocks.slice(0, 20).forEach((b) => {
+            const text = U.stripHtml(b.text);
+            if (b.type === "divider") return inner.append(U.el("hr"));
+            const tag = b.type.startsWith("heading") ? "h" + (Number(b.type.slice(-1)) + 1) : "p";
+            inner.append(U.el(tag, {
+              class: "synced-line",
+              text: (b.type === "bulleted" ? "• " : b.type === "todo" ? (b.checked ? "☑ " : "☐ ") : "") + text,
+            }));
+          });
+          box.append(inner);
+        }
+        wrap.append(box);
+        break;
+      }
+
+      case "ai": {
+        const box = U.el("div", { class: "ai-block" });
+        const out = U.el("div", { class: "ai-block-out", text: block.result || "Genera contenido con IA a partir de esta página." });
+        const action = AI.ACTIONS.find((a) => a.id === (block.aiAction || "summary"));
+        box.append(
+          U.el("div", { class: "ai-block-bar" },
+            U.el("span", { class: "ai-badge", html: ICONS.sparkle + "<span>IA</span>" }),
+            U.el("button", {
+              class: "btn", text: action?.name || "Resumir",
+              onclick: (e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                Menus.open({
+                  x: r.left, y: r.bottom + 4, width: 230,
+                  items: AI.ACTIONS.map((a) => ({
+                    label: a.name, active: a.id === block.aiAction,
+                    onClick: () => { block.aiAction = a.id; touch(); render(); },
+                  })),
+                });
+              },
+            }),
+            U.el("button", {
+              class: "btn btn-primary", text: "Generar",
+              onclick: async () => {
+                out.textContent = "Generando…";
+                const source = page.blocks.filter((b) => b.id !== block.id)
+                  .map((b) => U.stripHtml(b.text)).filter(Boolean).join("\n");
+                try {
+                  block.result = await AI.run(block.aiAction || "summary", source);
+                  out.textContent = block.result;
+                  touch();
+                } catch (err) {
+                  out.textContent = err.message;
+                }
+              },
+            }),
+            U.el("button", {
+              class: "btn", text: "Insertar como bloques",
+              onclick: () => {
+                if (!block.result) return U.toast("Genera algo primero");
+                Store.snapshot();
+                const at = blockIndex(block.id) + 1;
+                const made = block.result.split("\n").map((l) => l.trim()).filter(Boolean)
+                  .map((l) => Store.makeBlock(/^[-•*]\s+/.test(l) ? "bulleted" : "paragraph",
+                    { text: U.escapeHtml(l.replace(/^[-•*]\s+/, "")) }));
+                page.blocks.splice(at, 0, ...made);
+                touch(); render();
+              },
+            })),
+          out
+        );
+        wrap.append(box);
+        break;
+      }
+
       case "table-db":
         wrap.append(Database.render(page, block));
         break;
@@ -548,6 +846,31 @@ const Editor = (() => {
         wrap.append(makeContent());
     }
     return wrap;
+  }
+
+  /** Convierte enlaces conocidos en su URL insertable. */
+  function embedUrl(url) {
+    try {
+      const u = new URL(url);
+      if (/youtube\.com$/.test(u.hostname.replace("www.", "")) && u.searchParams.get("v"))
+        return "https://www.youtube.com/embed/" + u.searchParams.get("v");
+      if (u.hostname === "youtu.be") return "https://www.youtube.com/embed" + u.pathname;
+      if (u.hostname.includes("vimeo.com") && /^\/\d+/.test(u.pathname))
+        return "https://player.vimeo.com/video" + u.pathname;
+      if (u.hostname.includes("figma.com"))
+        return "https://www.figma.com/embed?embed_host=share&url=" + encodeURIComponent(url);
+      return url;
+    } catch {
+      return url;
+    }
+  }
+
+  function askEmbed(block) {
+    const url = prompt("Enlace a insertar (YouTube, Vimeo, Figma, Maps…):", block.url || "https://");
+    if (!url) return;
+    block.url = url;
+    touch();
+    render();
   }
 
   /* ----------------------------- Bloque HTML ------------------------------ */
@@ -607,10 +930,13 @@ const Editor = (() => {
 
   /* --------------------- Eventos del contenido editable ------------------- */
   function bindContent(node, block) {
+    const keepVersion = U.debounce(() => Store.recordVersion(page.id, "Edición"), 2500);
+
     const sync = () => {
       block.text = node.dataset.plain ? node.textContent : U.sanitizeInline(node.innerHTML);
       node.dataset.empty = String(!node.textContent.trim());
       Store.save();
+      keepVersion();
     };
 
     node.addEventListener("input", () => {
@@ -620,8 +946,8 @@ const Editor = (() => {
       if (Slash.isOpen()) {
         const at = Slash.ctx?.slashAt ?? 0;
         const q = (node.textContent || "").slice(at + 1, U.caretOffset(node));
-        if (q.length > 24 || q.includes(" ")) Slash.close();
-        else Slash.paint(q);
+        // Se permiten espacios: el menú sólo se cierra si ya no hay coincidencias.
+        if (q.length > 30 || Slash.paint(q) === 0) Slash.close();
       }
     });
 
@@ -667,7 +993,7 @@ const Editor = (() => {
         if (block.type !== "paragraph") { e.preventDefault(); setType(block.id, "paragraph"); return; }
         if (i > 0) {
           const prev = page.blocks[i - 1];
-          if (["divider", "image", "html", "table-db", "subpage", "bookmark"].includes(prev.type)) {
+          if (NON_TEXT.includes(prev.type)) {
             e.preventDefault();
             Store.snapshot();
             removeBlock(prev.id);
@@ -731,6 +1057,19 @@ const Editor = (() => {
         return;
       }
 
+      if (e.key === "Escape") {
+        e.preventDefault();
+        node.blur();
+        select(block.id, false);
+        return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        AI.open({ page, block, anchor: node });
+        return;
+      }
+
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
         e.preventDefault();
         Store.snapshot();
@@ -778,6 +1117,55 @@ const Editor = (() => {
     node.addEventListener("blur", () => { sync(); });
   }
 
+  /* --------------------------- Selección de bloques ------------------------ */
+  function select(id, additive) {
+    if (!additive) selection.clear();
+    if (id) selection.add(id);
+    paintSelection();
+  }
+
+  const clearSelection = () => { selection.clear(); paintSelection(); };
+
+  function paintSelection() {
+    root?.querySelectorAll(".block").forEach((n) =>
+      n.classList.toggle("is-selected", selection.has(n.dataset.id))
+    );
+  }
+
+  /** Atajos que actúan sobre la selección (los engancha App). */
+  function handleSelectionKey(e) {
+    if (!selection.size) return false;
+    if (e.key === "Escape") { clearSelection(); return true; }
+    if (e.key === "Backspace" || e.key === "Delete") {
+      e.preventDefault();
+      Store.snapshot();
+      page.blocks = page.blocks.filter((b) => !selection.has(b.id));
+      if (!page.blocks.length) page.blocks.push(Store.makeBlock());
+      clearSelection();
+      touch();
+      render();
+      return true;
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
+      e.preventDefault();
+      Store.snapshot();
+      const copies = page.blocks.filter((b) => selection.has(b.id)).map((b) => ({ ...JSON.parse(JSON.stringify(b)), id: U.uid("b") }));
+      const at = page.blocks.findIndex((b) => selection.has(b.id)) + selection.size;
+      page.blocks.splice(at, 0, ...copies);
+      touch();
+      render();
+      return true;
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c") {
+      const md = page.blocks.filter((b) => selection.has(b.id))
+        .map((b) => App.blockToMarkdown(b, page)).join("\n");
+      navigator.clipboard?.writeText(md);
+      U.toast(`${selection.size} bloque(s) copiados como Markdown`);
+      return true;
+    }
+    return false;
+  }
+
   /* --------------------------- Render de la página ------------------------ */
   function render() {
     if (!page || !root) return;
@@ -814,8 +1202,14 @@ const Editor = (() => {
   function mount(targetPage, container) {
     page = targetPage;
     root = container;
+    selection.clear();
     render();
   }
 
-  return { mount, render, TYPES, TURNABLE, setType, insertBlock, get page() { return page; } };
+  return {
+    mount, render, TYPES, TURNABLE, setType, insertBlock,
+    select, clearSelection, handleSelectionKey,
+    get page() { return page; },
+    get selection() { return selection; },
+  };
 })();

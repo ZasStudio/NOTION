@@ -3,6 +3,8 @@
    ========================================================================== */
 const Modals = (() => {
   function overlay(content, { top = false, onClose } = {}) {
+    Menus.closeAll();
+    Menus.hideFormatBar();
     const ov = U.el("div", { class: "overlay" + (top ? " top" : "") });
     ov.append(content);
     ov.addEventListener("mousedown", (e) => {

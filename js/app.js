@@ -85,9 +85,23 @@ const App = (() => {
     topbarEl.append(
       U.el(
         "div", { class: "topbar-actions" },
-        U.el("span", { class: "btn", text: "Editado " + U.timeAgo(page.updatedAt) }),
-        U.el("button", { class: "btn", text: "Compartir", onclick: () => U.toast("Demo local: no hay colaboración en tiempo real") }),
-        U.el("button", { class: "icon-btn", html: ICONS.comment, title: "Comentarios", onclick: () => U.toast("Comentarios en la demo: próximamente") }),
+        U.el("span", { class: "btn btn-quiet", text: "Editado " + U.timeAgo(page.updatedAt) }),
+        Collab.facepile([Store.state.me, ...Object.keys(page.share?.roles || {})].slice(0, 4)),
+        U.el("button", {
+          class: "btn ai-trigger", html: ICONS.sparkle + "<span>IA</span>", title: "Notion AI (⌘J)",
+          onclick: (e) => AI.open({ page, anchor: e.currentTarget }),
+        }),
+        U.el("button", { class: "btn", text: "Compartir", onclick: () => Collab.shareModal(page) }),
+        U.el("button", {
+          class: "icon-btn" + (Collab.countFor(page.id) ? " has-badge" : ""),
+          html: ICONS.comment + (Collab.countFor(page.id) ? `<i>${Collab.countFor(page.id)}</i>` : ""),
+          title: "Comentarios",
+          onclick: () => Collab.togglePanel(),
+        }),
+        U.el("button", {
+          class: "icon-btn", html: ICONS.clock, title: "Historial de versiones",
+          onclick: () => History.versions(page),
+        }),
         U.el("button", {
           class: "icon-btn fav-star" + (Store.isFavorite(page.id) ? " is-fav" : ""),
           html: ICONS.star, title: "Favorito",
@@ -114,6 +128,17 @@ const App = (() => {
                     U.toast("Enlace copiado");
                   } },
                 { label: "Exportar a Markdown", icon: ICONS.import, onClick: () => exportMarkdown(page) },
+                { label: "Historial de versiones", icon: ICONS.clock, onClick: () => History.versions(page) },
+                { label: "Analíticas de la página", icon: ICONS.sort, onClick: () => History.analytics(page) },
+                { label: page.share?.locked ? "Desbloquear página" : "Bloquear página", icon: ICONS.lock,
+                  onClick: () => {
+                    page.share = page.share || { public: false, roles: {}, locked: false };
+                    page.share.locked = !page.share.locked;
+                    Store.emit();
+                    renderPage(true);
+                    U.toast(page.share.locked ? "Página bloqueada" : "Página desbloqueada");
+                  } },
+                { label: "Compartir y permisos", icon: ICONS.share, onClick: () => Collab.shareModal(page) },
                 { type: "separator" },
                 { label: "Mover a la papelera", icon: ICONS.trash, danger: true,
                   onClick: () => {
@@ -136,39 +161,59 @@ const App = (() => {
   }
 
   /* --------------------------- Exportar a Markdown ------------------------ */
+  /** Convierte un bloque a Markdown (lo usan la exportación y el copiado). */
+  function blockToMarkdown(b, page) {
+    const text = U.stripHtml(b.text);
+    switch (b.type) {
+      case "heading1": return `## ${text}`;
+      case "heading2": return `### ${text}`;
+      case "heading3": return `#### ${text}`;
+      case "bulleted": return `${"  ".repeat(b.indent || 0)}- ${text}`;
+      case "numbered": return `${"  ".repeat(b.indent || 0)}1. ${text}`;
+      case "todo": return `- [${b.checked ? "x" : " "}] ${text}`;
+      case "toggle": return `<details><summary>${text}</summary></details>`;
+      case "quote": return `> ${text}`;
+      case "callout": return `> ${b.emoji || "💡"} ${text}`;
+      case "divider": return "---";
+      case "code": return "```" + (b.lang || "") + "\n" + text + "\n```";
+      case "image": return `![${text}](${b.src || ""})`;
+      case "bookmark": return `[${b.title || b.url}](${b.url})`;
+      case "embed": return `[embed](${b.url || ""})`;
+      case "file": return `[${b.fileName || "archivo"}](${b.fileName || ""})`;
+      case "html": return "```html\n" + (b.src || "") + "\n```";
+      case "ai": return b.result ? `> 🤖 ${b.result.replace(/\n/g, "\n> ")}` : "";
+      case "synced": {
+        const src = b.sourceId ? Store.getPage(b.sourceId) : null;
+        return src ? `> 🔗 Sincronizado desde ${src.title}` : "";
+      }
+      case "toc": return "<!-- tabla de contenidos -->";
+      case "breadcrumb": return "";
+      case "button": return `[${b.label || "Botón"}]`;
+      case "subpage": {
+        const sub = b.pageId ? Store.getPage(b.pageId) : null;
+        return sub ? `- [[${sub.title || "Sin título"}]]` : "";
+      }
+      case "table-db": {
+        const db = page?.db;
+        if (!db) return "";
+        const head = `| ${db.props.map((p) => p.name).join(" | ")} |`;
+        const sep = `| ${db.props.map(() => "---").join(" | ")} |`;
+        const rows = db.rows.map((r) =>
+          `| ${db.props.map((p) => {
+            const v = r.cells[p.id];
+            return Array.isArray(v) ? v.join(", ") : v ?? "";
+          }).join(" | ")} |`
+        );
+        return [head, sep, ...rows].join("\n");
+      }
+      default: return text;
+    }
+  }
+
   function exportMarkdown(page) {
     const lines = [`# ${page.title || "Sin título"}`, ""];
     page.blocks.forEach((b) => {
-      const text = U.stripHtml(b.text);
-      switch (b.type) {
-        case "heading1": lines.push(`## ${text}`); break;
-        case "heading2": lines.push(`### ${text}`); break;
-        case "heading3": lines.push(`#### ${text}`); break;
-        case "bulleted": lines.push(`${"  ".repeat(b.indent || 0)}- ${text}`); break;
-        case "numbered": lines.push(`${"  ".repeat(b.indent || 0)}1. ${text}`); break;
-        case "todo": lines.push(`- [${b.checked ? "x" : " "}] ${text}`); break;
-        case "quote": lines.push(`> ${text}`); break;
-        case "callout": lines.push(`> ${b.emoji || "💡"} ${text}`); break;
-        case "divider": lines.push("---"); break;
-        case "code": lines.push("```" + (b.lang || ""), text, "```"); break;
-        case "image": lines.push(`![${text}](${b.src || ""})`); break;
-        case "bookmark": lines.push(`[${b.title || b.url}](${b.url})`); break;
-        case "html": lines.push("```html", b.src || "", "```"); break;
-        case "table-db": {
-          const db = page.db;
-          if (!db) break;
-          lines.push(`| ${db.props.map((p) => p.name).join(" | ")} |`);
-          lines.push(`| ${db.props.map(() => "---").join(" | ")} |`);
-          db.rows.forEach((r) =>
-            lines.push(`| ${db.props.map((p) => {
-              const v = r.cells[p.id];
-              return Array.isArray(v) ? v.join(", ") : v ?? "";
-            }).join(" | ")} |`)
-          );
-          break;
-        }
-        default: lines.push(text);
-      }
+      lines.push(blockToMarkdown(b, page));
       lines.push("");
     });
     const blob = new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" });
@@ -250,6 +295,7 @@ const App = (() => {
     const body = U.el("div", { class: "page-body" });
     if (page.small) body.style.fontSize = "14px";
     const top = U.el("div", { class: "page-top" });
+    body.append(top);
 
     /* Icono */
     if (page.icon) {
@@ -299,8 +345,21 @@ const App = (() => {
     top.append(controls);
 
     /* Título */
+    if (page.share?.locked) {
+      wrap.classList.add("is-locked");
+      body.append(
+        U.el("div", { class: "lock-banner" },
+          U.el("span", { html: ICONS.lock }),
+          U.el("span", { text: "Página bloqueada · solo lectura" }),
+          U.el("button", {
+            class: "btn", text: "Desbloquear",
+            onclick: () => { page.share.locked = false; Store.emit(); renderPage(true); },
+          }))
+      );
+    }
+
     const title = U.el("h1", {
-      class: "page-title", contenteditable: "true", spellcheck: "false",
+      class: "page-title", contenteditable: page.share?.locked ? "false" : "true", spellcheck: "false",
       text: page.title, dataset: { placeholder: "Sin título", empty: String(!page.title) },
     });
     title.addEventListener("input", () => {
@@ -318,7 +377,6 @@ const App = (() => {
     });
     top.append(title);
 
-    body.append(top);
     const blocks = U.el("div", { class: "blocks" });
     body.append(blocks);
     wrap.append(body);
@@ -332,6 +390,18 @@ const App = (() => {
   function initShortcuts() {
     document.addEventListener("keydown", (e) => {
       const mod = e.metaKey || e.ctrlKey;
+      if (Editor.handleSelectionKey(e)) return;
+      if (mod && e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        const page = Store.getPage(Store.state.openId);
+        if (page) AI.open({ page, anchor: U.$(".ai-trigger") || U.$("#topbar") });
+        return;
+      }
+      if (mod && e.shiftKey && e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        Collab.togglePanel();
+        return;
+      }
       if (mod && e.key.toLowerCase() === "k" && !e.shiftKey) {
         e.preventDefault();
         Modals.search();
@@ -382,12 +452,14 @@ const App = (() => {
     if (hashId && Store.getPage(hashId) && !Store.getPage(hashId).deleted) Store.state.openId = hashId;
     if (!Store.getPage(Store.state.openId)) Store.state.openId = Store.childrenOf(null)[0]?.id || null;
 
+    if (Store.state.openId) Store.trackView(Store.state.openId);
     renderTopbar();
     renderPage(true);
 
     Store.subscribe(() => {
       renderTopbar();
       renderPage();
+      if (Collab.panelOpen) Collab.renderPanel();
     });
 
     window.addEventListener("hashchange", () => {
@@ -398,7 +470,7 @@ const App = (() => {
     if (!Store.state.seenAnnouncement) setTimeout(Modals.cooking, 600);
   }
 
-  return { boot, setTheme, toggleTheme, toggleSidebar, renderPage, renderTopbar, exportMarkdown };
+  return { boot, setTheme, toggleTheme, toggleSidebar, renderPage, renderTopbar, exportMarkdown, blockToMarkdown };
 })();
 
 document.addEventListener("DOMContentLoaded", App.boot);
