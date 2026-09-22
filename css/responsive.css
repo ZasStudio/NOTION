@@ -58,6 +58,9 @@
 
   /* --- Cajón lateral --- */
   #sidebar { width: min(86vw, 320px); z-index: 60; padding-bottom: env(safe-area-inset-bottom); }
+  /* El cajón es más ancho que --sidebar-width: hay que esconderlo entero */
+  body.sidebar-collapsed #sidebar { margin-left: 0; transform: translateX(-101%); }
+  #sidebar { transition: transform 200ms var(--ease); }
   body:not(.sidebar-collapsed) #main::after { z-index: 50; }
   .sb-item, .tree-row { height: 38px; }
   .tree-toggle, .tree-actions { opacity: 1; }

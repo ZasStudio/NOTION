@@ -262,7 +262,7 @@ const App = (() => {
     renderedId = page.id;
 
     contentEl.innerHTML = "";
-    const wrap = U.el("div", { class: "page" + (page.fullWidth ? " page-full" : "") });
+    const wrap = U.el("div", { class: "page" + (page.fullWidth ? " page-full" : ""), "data-tour": "pagina" });
 
     /* Portada */
     if (page.cover) {
@@ -656,6 +656,8 @@ const App = (() => {
     Agents.startScheduler();
 
     if (!Store.state.seenAnnouncement) setTimeout(Modals.cooking, 600);
+    // La guía se abre sola la primera vez, cuando no hay nada más encima
+    Tour.maybeAutoStart(Store.state.seenAnnouncement ? 800 : 1200);
   }
 
   return {

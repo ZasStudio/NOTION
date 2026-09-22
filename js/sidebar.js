@@ -191,7 +191,7 @@ const Sidebar = (() => {
 
     /* Acciones rápidas */
     scroll.append(
-      U.el("button", { class: "sb-item", html: ICONS.search + "<span>Buscar</span><kbd>⌘K</kbd>", onclick: Modals.search }),
+      U.el("button", { class: "sb-item", "data-tour": "buscar", html: ICONS.search + "<span>Buscar</span><kbd>⌘K</kbd>", onclick: Modals.search }),
       U.el("button", {
         class: "sb-item", html: ICONS.home + "<span>Inicio</span>",
         onclick: () => {
@@ -200,14 +200,14 @@ const Sidebar = (() => {
         },
       }),
       U.el("button", {
-        class: "sb-item", html: ICONS.sparkle + "<span>Notion AI</span><kbd>⌘J</kbd>",
+        class: "sb-item", "data-tour": "ia", html: ICONS.sparkle + "<span>Notion AI</span><kbd>⌘J</kbd>",
         onclick: () => {
           const page = Store.getPage(st.openId);
           if (page) AI.open({ page, anchor: U.$("#topbar") });
         },
       }),
       U.el("button", {
-        class: "sb-item", html: ICONS.routines + "<span>Agentes y rutinas</span>",
+        class: "sb-item", "data-tour": "agentes", html: ICONS.routines + "<span>Agentes y rutinas</span>",
         onclick: () => Agents.routines(),
       }),
       U.el("button", { class: "sb-item", html: ICONS.settings + "<span>Ajustes</span>", onclick: Modals.settings })
@@ -333,7 +333,7 @@ const Sidebar = (() => {
 
     scroll.append(
       U.el("button", {
-        class: "sb-item", html: ICONS.plus + "<span>Nueva página</span>",
+        class: "sb-item", "data-tour": "nueva-pagina", html: ICONS.plus + "<span>Nueva página</span>",
         onclick: () => Store.open(Store.createPage({ title: "" }).id),
       })
     );
@@ -344,7 +344,7 @@ const Sidebar = (() => {
     root.append(
       U.el(
         "div", { class: "sb-foot" },
-        U.el("button", { class: "sb-item", html: ICONS.template + "<span>Plantillas</span>", onclick: () => Modals.templates() }),
+        U.el("button", { class: "sb-item", "data-tour": "plantillas", html: ICONS.template + "<span>Plantillas</span>", onclick: () => Modals.templates() }),
         U.el("button", { class: "sb-item", html: ICONS.people + "<span>Personas</span>", onclick: Collab.peopleModal }),
         U.el("button", {
           class: "sb-item", html: ICONS.settings + "<span>Administración</span>",
@@ -367,6 +367,7 @@ const Sidebar = (() => {
           },
         }),
         U.el("button", { class: "sb-item", html: ICONS.trash + "<span>Papelera</span>", onclick: Modals.trash }),
+        U.el("button", { class: "sb-item", "data-tour": "guia", html: ICONS.sparkle + "<span>Guía rápida</span>", onclick: () => Tour.start({ manual: true }) }),
         U.el("button", { class: "sb-item", html: ICONS.sparkle + "<span>Novedades</span>", onclick: Modals.cooking }),
         Plans.badge()
       )

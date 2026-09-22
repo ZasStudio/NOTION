@@ -23,6 +23,7 @@ const Store = (() => {
     openId: null,
     expanded: {},
     seenAnnouncement: false,
+    seenTour: false,
     recent: [],
 
     /* --- Funciones avanzadas: todas activas, sin planes ni cobros --- */

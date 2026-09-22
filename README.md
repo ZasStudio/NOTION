@@ -32,6 +32,17 @@ Dos pieles, conmutables en *Ajustes → Apariencia*:
   hay `backdrop-filter`.
 - **Clásico**: la réplica fiel del diseño plano de Notion.
 
+## Guía en tiempo real
+
+La primera vez que alguien entra se abre sola una guía de nueve pasos que
+ilumina la parte de la interfaz que explica (foco con anillo que late) y
+acompaña cada paso con una maqueta animada: el menú de «/» escribiéndose solo,
+la barra de formato apareciendo sobre una selección, una base de datos que
+cambia de vista, Notion AI respondiendo y un bloque que se arrastra. Se avanza
+con los botones o con ←/→, se sale con Esc, y se puede repetir cuando se quiera
+desde **Guía rápida**, abajo en el lateral. En móvil la tarjeta se convierte en
+una hoja inferior.
+
 ## El proyecto dentro de la réplica
 
 El espacio de equipo **Proyecto** contiene la página «Réplica de Notion» con la
@@ -172,10 +183,10 @@ trimestrales y Seguimiento de bugs.
 ```
 index.html
 css/  tokens.css  base.css  layout.css  editor.css  database.css
-      overlays.css  pro.css  glass.css
+      overlays.css  pro.css  glass.css  tour.css  responsive.css
 js/   utils.js  icons.js  templates.js  store.js  assets.js  charts.js
       plans.js  menus.js  collab.js  history.js  ai.js  agents.js
-      database.js  blocks.js  modals.js  sidebar.js  app.js
+      database.js  blocks.js  modals.js  sidebar.js  tour.js  app.js
 ```
 
 `store.js` mantiene el estado (páginas, personas, espacios, comentarios,
@@ -183,7 +194,9 @@ versiones, auditoría) y lo persiste; `blocks.js` es el editor; `database.js`
 dibuja las vistas y el motor de fórmulas, relaciones y automatizaciones;
 `ai.js` el asistente; `agents.js` skills, conexiones MCP y rutinas; `collab.js` compartir y comentarios; `history.js`
 versiones, analíticas, auditoría y exportaciones; `charts.js` las gráficas SVG; `assets.js` el almacén de archivos y el selector de medios;
-`modals.js` buscador, plantillas, papelera, ajustes y el anuncio.
+`modals.js` buscador, plantillas, papelera, ajustes y el anuncio; `tour.js` la
+guía guiada con sus maquetas animadas. `responsive.css` adapta los paneles a
+monitores grandes y a móvil.
 
 ## Notas
 
