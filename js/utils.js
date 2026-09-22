@@ -53,6 +53,8 @@ const U = (() => {
         if ((name === "href" || name === "src") && val.startsWith("javascript:"))
           n.removeAttribute(attr.name);
       }
+      // Las menciones conservan su referencia y siguen sin ser editables
+      if (n.classList?.contains("mention")) n.setAttribute("contenteditable", "false");
     });
     return tpl.innerHTML;
   }

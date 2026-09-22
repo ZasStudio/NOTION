@@ -38,12 +38,22 @@ const Database = (() => {
     { id: "chart", name: "Gráfica", icon: ICONS.board },
   ];
 
-  let page = null, db = null, block = null, host = null;
+  let page = null, db = null, block = null, host = null, linked = false;
   const dirty = () => { Store.updatePage(page.id, {}); };
-  const repaint = () => { paint(); };
+
+  /* Un panel de propiedades se repinta a sí mismo, no la base entera. */
+  let repaintHook = null;
+  const repaint = () => (repaintHook ? repaintHook() : paint());
 
   const titleProp = () => db.props.find((p) => p.type === "title") || db.props[0];
-  const activeView = () => db.views.find((v) => v.id === db.activeView) || db.views[0];
+
+  /** Una vista enlazada recuerda su propia vista activa en el bloque. */
+  const activeViewId = () => (linked && block?.activeView) || db.activeView;
+  const activeView = () => db.views.find((v) => v.id === activeViewId()) || db.views[0];
+  const setActiveView = (id) => {
+    if (linked && block) block.activeView = id;
+    else db.activeView = id;
+  };
 
   /* --------------------- Fórmulas, relaciones y rollups ------------------- */
 
@@ -132,21 +142,111 @@ const Database = (() => {
   }
 
   /* --------------------------- Filas como páginas ------------------------- */
-  function openRow(row) {
+  function openRow(row, { peek = true } = {}) {
     const tp = titleProp();
+    const dbPageId = page.id;
     if (!row.pageId || !Store.getPage(row.pageId)) {
       const sub = Store.createPage({
         title: row.cells[tp.id] || "Sin título",
         icon: "📄",
-        parentId: page.id,
+        parentId: dbPageId,
         blocks: [Store.makeBlock("paragraph", { text: "" })],
       });
+      sub.dbRef = { pageId: dbPageId, rowId: row.id };
       row.pageId = sub.id;
       dirty();
     } else {
+      const existing = Store.getPage(row.pageId);
+      if (!existing.dbRef) existing.dbRef = { pageId: dbPageId, rowId: row.id };
       Store.updatePage(row.pageId, { title: row.cells[tp.id] || "Sin título" });
     }
-    Store.open(row.pageId);
+    if (peek) App.openPeek(row.pageId);
+    else Store.open(row.pageId);
+  }
+
+  /* ---------------------- Panel de propiedades de una fila ----------------- */
+  /**
+   * Devuelve el bloque de propiedades que se muestra bajo el título de la
+   * página de una fila, como en Notion.
+   */
+  function propertyPanel(dbPage, rowId) {
+    const panel = U.el("div", { class: "prop-panel" });
+    const bind = () => {
+      page = dbPage;
+      db = dbPage.db;
+      block = null;
+      linked = false;
+      host = panel;
+      repaintHook = paintPanel;
+    };
+
+    function paintPanel() {
+      bind();
+      const row = db.rows.find((r) => r.id === rowId);
+      panel.innerHTML = "";
+      if (!row) {
+        panel.append(U.el("div", { class: "db-hint", text: "Esta fila ya no existe en la base de datos." }));
+        return;
+      }
+      db.props.forEach((prop) => {
+        if (prop.type === "title") return;
+        const icon = (PROP_TYPES.find((t) => t.id === prop.type) || { icon: ICONS.text }).icon;
+        panel.append(
+          U.el(
+            "div", { class: "prop-row" },
+            U.el("button", {
+              class: "prop-label", html: icon + `<span>${U.escapeHtml(prop.name)}</span>`,
+              onclick: (e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                Menus.open({
+                  x: r.left, y: r.bottom + 4, width: 220,
+                  items: [
+                    { type: "custom", node: U.el("input", {
+                        class: "menu-input", value: prop.name,
+                        oninput: (ev) => { prop.name = ev.target.value; dirty(); },
+                        onkeydown: (ev) => { ev.stopPropagation(); if (ev.key === "Enter") { Menus.closeAll(); paintPanel(); } },
+                      }) },
+                    { type: "label", label: "Tipo" },
+                    ...PROP_TYPES.map((t) => ({
+                      label: t.name, icon: t.icon, active: prop.type === t.id,
+                      onClick: () => { prop.type = t.id; dirty(); paintPanel(); },
+                    })),
+                    { type: "separator" },
+                    { label: "Eliminar propiedad", icon: ICONS.trash, danger: true,
+                      onClick: () => {
+                        db.props = db.props.filter((p) => p.id !== prop.id);
+                        db.rows.forEach((r) => delete r.cells[prop.id]);
+                        dirty(); paintPanel();
+                      } },
+                  ],
+                });
+              },
+            }),
+            renderCell(row, prop, { compact: true })
+          )
+        );
+      });
+
+      panel.append(
+        U.el("button", {
+          class: "prop-add", html: ICONS.plus + "<span>Añadir propiedad</span>",
+          onclick: () => {
+            db.props.push({ id: U.uid("pr"), name: "Propiedad", type: "text", options: [] });
+            dirty();
+            paintPanel();
+          },
+        })
+      );
+    }
+
+    // Cualquier interacción dentro del panel restaura su contexto antes de
+    // que corran los manejadores de las celdas.
+    ["mousedown", "keydown", "input", "change", "click"].forEach((evt) =>
+      panel.addEventListener(evt, bind, true)
+    );
+
+    paintPanel();
+    return panel;
   }
 
   function addRow(preset = {}, { silent = false } = {}) {
@@ -740,7 +840,8 @@ const Database = (() => {
               Menus.open({
                 x: r.left, y: r.bottom + 2, width: 200,
                 items: [
-                  { label: "Abrir como página", icon: ICONS.expand, onClick: () => openRow(row) },
+                  { label: "Abrir en ventana lateral", icon: ICONS.expand, onClick: () => openRow(row) },
+                  { label: "Abrir como página", icon: ICONS.doc, onClick: () => openRow(row, { peek: false }) },
                   { label: "Duplicar", icon: ICONS.duplicate, onClick: () => {
                       Store.snapshot();
                       db.rows.splice(db.rows.indexOf(row) + 1, 0, {
@@ -758,13 +859,79 @@ const Database = (() => {
       tbody.append(tr);
     });
 
-    table.append(thead, tbody);
+    // Pie con cálculos por columna, como en Notion
+    const foot = U.el("tfoot");
+    const frow = U.el("tr", { class: "db-calc-row" });
+    db.props.forEach((prop) => {
+      const view = activeView();
+      view.calcs = view.calcs || {};
+      const fn = view.calcs[prop.id] || "none";
+      frow.append(
+        U.el("td", {},
+          U.el("button", {
+            class: "db-calc" + (fn === "none" ? "" : " is-on"),
+            text: fn === "none" ? "Calcular" : calcLabel(prop, fn),
+            onclick: (e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              Menus.open({
+                x: r.left, y: r.bottom + 4, width: 210,
+                items: CALCS.filter((c) => !c.numeric || ["number", "formula", "rollup"].includes(prop.type))
+                  .map((c) => ({
+                    label: c.name, active: fn === c.id,
+                    onClick: () => { view.calcs[prop.id] = c.id; dirty(); repaint(); },
+                  })),
+              });
+            },
+          })
+        )
+      );
+    });
+    frow.append(U.el("td"));
+    foot.append(frow);
+
+    table.append(thead, tbody, foot);
     return U.el(
       "div", {},
       table,
       U.el("button", { class: "db-add-row", html: ICONS.plus + "<span>Nueva</span>", onclick: () => addRow() }),
       U.el("div", { class: "db-count", text: `${db.rows.length} registro${db.rows.length === 1 ? "" : "s"}` })
     );
+  }
+
+  /* ------------------------ Cálculos de columna --------------------------- */
+  const CALCS = [
+    { id: "none", name: "Ninguno" },
+    { id: "count", name: "Contar todo" },
+    { id: "filled", name: "Contar con valor" },
+    { id: "empty", name: "Contar vacíos" },
+    { id: "unique", name: "Valores únicos" },
+    { id: "percent_filled", name: "Porcentaje con valor" },
+    { id: "sum", name: "Suma", numeric: true },
+    { id: "avg", name: "Media", numeric: true },
+    { id: "min", name: "Mínimo", numeric: true },
+    { id: "max", name: "Máximo", numeric: true },
+    { id: "range", name: "Rango", numeric: true },
+  ];
+
+  function calcLabel(prop, fn) {
+    const rows = visibleRows();
+    const values = rows.map((r) => valueOf(r, prop));
+    const filled = values.filter((v) => v !== "" && v !== undefined && v !== null && !(Array.isArray(v) && !v.length));
+    const nums = values.map((v) => Number(v)).filter((n) => !isNaN(n));
+    const round = (n) => Math.round(n * 100) / 100;
+    switch (fn) {
+      case "count": return `Total ${rows.length}`;
+      case "filled": return `Con valor ${filled.length}`;
+      case "empty": return `Vacíos ${rows.length - filled.length}`;
+      case "unique": return `Únicos ${new Set(filled.map(String)).size}`;
+      case "percent_filled": return rows.length ? `${Math.round((filled.length / rows.length) * 100)}% con valor` : "0%";
+      case "sum": return `Suma ${round(nums.reduce((a, b) => a + b, 0))}`;
+      case "avg": return nums.length ? `Media ${round(nums.reduce((a, b) => a + b, 0) / nums.length)}` : "Media —";
+      case "min": return nums.length ? `Mín ${round(Math.min(...nums))}` : "Mín —";
+      case "max": return nums.length ? `Máx ${round(Math.max(...nums))}` : "Máx —";
+      case "range": return nums.length ? `Rango ${round(Math.max(...nums) - Math.min(...nums))}` : "Rango —";
+      default: return "Calcular";
+    }
   }
 
   function sortBy(propId, dir) {
@@ -1274,6 +1441,7 @@ const Database = (() => {
 
   /* --------------------------------- Pintado ------------------------------- */
   function paint() {
+    repaintHook = null;
     host.innerHTML = "";
     const v = activeView();
 
@@ -1284,7 +1452,7 @@ const Database = (() => {
         U.el("button", {
           class: "db-view-tab" + (view.id === v.id ? " is-active" : ""),
           html: meta.icon + `<span>${U.escapeHtml(view.name)}</span>`,
-          onclick: () => { db.activeView = view.id; dirty(); repaint(); },
+          onclick: () => { setActiveView(view.id); dirty(); repaint(); },
           oncontextmenu: (e) => {
             e.preventDefault();
             Menus.open({
@@ -1298,7 +1466,7 @@ const Database = (() => {
                   label: "Eliminar vista", icon: ICONS.trash, danger: true,
                   onClick: () => {
                     db.views = db.views.filter((x) => x.id !== view.id);
-                    db.activeView = db.views[0].id;
+                    setActiveView(db.views[0].id);
                     dirty(); repaint();
                   },
                 },
@@ -1324,7 +1492,7 @@ const Database = (() => {
                 if (t.id === "board") nv.groupBy = (db.props.find((p) => p.type === "select") || {}).id;
                 if (t.id === "calendar") nv.dateProp = (db.props.find((p) => p.type === "date") || {}).id;
                 db.views.push(nv);
-                db.activeView = nv.id;
+                setActiveView(nv.id);
                 dirty(); repaint();
               },
             })),
@@ -1448,9 +1616,10 @@ const Database = (() => {
   }
 
   /** Punto de entrada: devuelve el nodo de la base de datos del bloque dado. */
-  function render(targetPage, targetBlock) {
+  function render(targetPage, targetBlock, opts = {}) {
     page = targetPage;
     block = targetBlock;
+    linked = !!opts.linked;
     if (!page.db) {
       page.db = Templates.db(
         "Nueva base de datos",
@@ -1468,5 +1637,5 @@ const Database = (() => {
     return host;
   }
 
-  return { render, PROP_TYPES, VIEW_TYPES };
+  return { render, propertyPanel, PROP_TYPES, VIEW_TYPES, CALCS };
 })();

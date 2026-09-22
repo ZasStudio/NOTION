@@ -28,6 +28,11 @@ const Editor = (() => {
     { type: "button", name: "Botón", icon: ICONS.routines, desc: "Un clic que inserta bloques o crea filas.", group: "Avanzado" },
     { type: "synced", name: "Bloque sincronizado", icon: ICONS.mcp, desc: "El mismo contenido en varias páginas.", group: "Avanzado" },
     { type: "ai", name: "Bloque de IA", icon: ICONS.sparkle, desc: "Resumen o texto generado que puedes regenerar.", group: "Avanzado" },
+    { type: "table", name: "Tabla simple", icon: ICONS.table, desc: "Una tabla de texto, sin base de datos.", group: "Básicos" },
+    { type: "columns2", name: "2 columnas", icon: ICONS.board, desc: "Divide el contenido en dos columnas.", group: "Diseño" },
+    { type: "columns3", name: "3 columnas", icon: ICONS.board, desc: "Tres columnas lado a lado.", group: "Diseño" },
+    { type: "columns4", name: "4 columnas", icon: ICONS.board, desc: "Cuatro columnas lado a lado.", group: "Diseño" },
+    { type: "linked-db", name: "Vista enlazada", icon: ICONS.table, desc: "Muestra la base de datos de otra página.", group: "Bases de datos" },
   ];
 
   const TURNABLE = TYPES.filter((t) =>
@@ -50,15 +55,40 @@ const Editor = (() => {
   };
 
   const NON_TEXT = ["divider", "image", "html", "table-db", "subpage", "bookmark",
-    "toc", "breadcrumb", "button", "file", "embed", "synced", "ai"];
+    "toc", "breadcrumb", "button", "file", "embed", "synced", "ai",
+    "columns", "table", "linked-db"];
 
   let page = null;
   let root = null;
   let selection = new Set();
+  let rendering = false;   // el blur dispara durante el re-render: hay que ignorarlo
 
   /* ------------------------------ Utilidades ------------------------------ */
-  const blockIndex = (id) => page.blocks.findIndex((b) => b.id === id);
-  const blockById = (id) => page.blocks.find((b) => b.id === id);
+  /* Cada bloque sabe en qué lista vive: la de la página o la de una columna. */
+  const ownerOf = new Map();
+
+  function indexBlocks(list) {
+    list.forEach((b) => {
+      ownerOf.set(b.id, list);
+      if (b.type === "columns") (b.cols || []).forEach((c) => indexBlocks(c.blocks || []));
+    });
+  }
+
+  const listOf = (id) => ownerOf.get(id) || page.blocks;
+  const blockIndex = (id) => listOf(id).findIndex((b) => b.id === id);
+
+  function blockById(id) {
+    let found = null;
+    const walk = (list) => {
+      for (const b of list) {
+        if (b.id === id) { found = b; return; }
+        if (b.type === "columns") (b.cols || []).forEach((c) => walk(c.blocks || []));
+      }
+    };
+    walk(page.blocks);
+    return found;
+  }
+
   const touch = () => Store.updatePage(page.id, {});
 
   function focusBlock(id, atEnd = true) {
@@ -76,8 +106,10 @@ const Editor = (() => {
   }
 
   function insertBlock(afterId, block, focus = true) {
-    const i = afterId ? blockIndex(afterId) + 1 : page.blocks.length;
-    page.blocks.splice(i, 0, block);
+    const list = afterId ? listOf(afterId) : page.blocks;
+    const i = afterId ? blockIndex(afterId) + 1 : list.length;
+    list.splice(i, 0, block);
+    ownerOf.set(block.id, list);
     touch();
     render();
     if (focus) focusBlock(block.id, false);
@@ -85,9 +117,10 @@ const Editor = (() => {
   }
 
   function removeBlock(id) {
-    const i = blockIndex(id);
+    const list = listOf(id);
+    const i = list.findIndex((b) => b.id === id);
     if (i < 0) return;
-    page.blocks.splice(i, 1);
+    list.splice(i, 1);
     if (!page.blocks.length) page.blocks.push(Store.makeBlock());
     touch();
     render();
@@ -105,6 +138,42 @@ const Editor = (() => {
       b.src = "<!doctype html>\n<h2 style=\"font-family:sans-serif\">¡Hola desde un bloque HTML!</h2>";
       b.height = 200;
     }
+    // Las columnas nacen con el contenido actual en la primera
+    if (/^columns[234]$/.test(type)) {
+      const count = Number(type.slice(-1));
+      const list = listOf(b.id);
+      const at = list.findIndex((x) => x.id === b.id);
+      const first = { ...JSON.parse(JSON.stringify(b)), id: U.uid("b") };
+      if (first.type === "paragraph" && !U.stripHtml(first.text).trim()) first.text = "";
+      const columns = Store.makeBlock("columns", {
+        cols: Array.from({ length: count }, (_, i) => ({
+          width: 100 / count,
+          blocks: [i === 0 ? first : Store.makeBlock()],
+        })),
+      });
+      list.splice(at, 1, columns);
+      touch();
+      render();
+      focusBlock(columns.cols[0].blocks[0].id);
+      return;
+    }
+
+    if (type === "table" && !b.rows) {
+      b.rows = [["", "", ""], ["", "", ""], ["", "", ""]];
+      b.headerRow = true;
+      b.headerCol = false;
+    }
+
+    if (type === "linked-db" && !b.sourcePageId) {
+      const sources = Object.values(Store.state.pages).filter((p) => !p.deleted && p.db);
+      if (!sources.length) {
+        U.toast("Crea antes una página con base de datos");
+        b.type = "paragraph";
+        return;
+      }
+      setTimeout(() => pickLinkedSource(b), 0);
+    }
+
     if (type === "button" && !b.label) {
       b.label = "Añadir tarea";
       b.action = { type: "insert", blockType: "todo", text: "Nueva tarea" };
@@ -200,6 +269,122 @@ const Editor = (() => {
       const below = window.innerHeight - r.bottom;
       node.style.maxHeight = "340px";
       node.style.top = (below > 360 ? r.bottom + 6 : Math.max(8, r.top - 346)) + "px";
+      // Si se escribió más rápido que el temporizador, arranca ya filtrado
+      const typed = (contentEl.textContent || "").slice(slashAt + 1, U.caretOffset(contentEl));
+      if (typed) paint(typed);
+    }
+
+    function handleKey(e) {
+      if (!isOpen()) return false;
+      if (e.key === "ArrowDown") { e.preventDefault(); setActive((active + 1) % items.length); return true; }
+      if (e.key === "ArrowUp") { e.preventDefault(); setActive((active - 1 + items.length) % items.length); return true; }
+      if (e.key === "Enter") { e.preventDefault(); choose(active); return true; }
+      if (e.key === "Escape") { e.preventDefault(); close(); return true; }
+      return false;
+    }
+
+    return { openFor, close, isOpen, paint, handleKey, get ctx() { return ctx; } };
+  })();
+
+  /* ------------------------------ Menciones ------------------------------- */
+  const Mention = (() => {
+    let node = null, ctx = null, items = [], active = 0;
+
+    const close = () => { node?.remove(); node = null; ctx = null; };
+    const isOpen = () => !!node;
+
+    function candidates(query) {
+      const q = query.toLowerCase().trim();
+      const out = [];
+      Object.values(Store.state.pages)
+        .filter((p) => !p.deleted && p.id !== page.id)
+        .filter((p) => !q || (p.title || "").toLowerCase().includes(q))
+        .slice(0, 6)
+        .forEach((p) => out.push({
+          kind: "page", id: p.id, icon: p.icon || "📄",
+          label: p.title || "Sin título", sub: "Página",
+        }));
+      Store.state.members
+        .filter((m) => !q || m.name.toLowerCase().includes(q))
+        .slice(0, 4)
+        .forEach((m) => out.push({ kind: "person", id: m.id, icon: "👤", label: m.name, sub: m.email }));
+
+      const today = new Date();
+      const day = (n, label) => {
+        const d = new Date(today);
+        d.setDate(d.getDate() + n);
+        return { kind: "date", id: d.toISOString().slice(0, 10), icon: "📅", label, sub: U.formatDate(d.toISOString().slice(0, 10)) };
+      };
+      [day(0, "Hoy"), day(1, "Mañana"), day(7, "En una semana")]
+        .filter((d) => !q || d.label.toLowerCase().includes(q))
+        .forEach((d) => out.push(d));
+      return out;
+    }
+
+    function paint(query = "") {
+      items = candidates(query);
+      active = 0;
+      node.innerHTML = "";
+      if (!items.length) {
+        node.append(U.el("div", { class: "menu-label", text: "Sin coincidencias" }));
+        return 0;
+      }
+      items.forEach((it, i) =>
+        node.append(
+          U.el("button", {
+            class: "menu-item" + (i === active ? " is-active" : ""),
+            dataset: { i },
+            onmousedown: (e) => e.preventDefault(),
+            onclick: () => choose(i),
+          },
+            U.el("span", { text: it.icon }),
+            U.el("span", { class: "menu-item-body" },
+              U.el("span", { text: it.label }),
+              U.el("span", { class: "menu-sub", text: it.sub })),
+          )
+        )
+      );
+      return items.length;
+    }
+
+    const setActive = (i) => {
+      active = i;
+      node.querySelectorAll(".menu-item").forEach((b) =>
+        b.classList.toggle("is-active", Number(b.dataset.i) === active));
+    };
+
+    function choose(i) {
+      const it = items[i];
+      if (!it || !ctx) return;
+      const { block: b, contentEl, at } = ctx;
+      const text = contentEl.textContent || "";
+      const before = U.escapeHtml(text.slice(0, at));
+      const after = U.escapeHtml(text.slice(U.caretOffset(contentEl)));
+      const html =
+        it.kind === "page"
+          ? `<a class="mention mention-page" data-page="${it.id}" contenteditable="false">${it.icon} ${U.escapeHtml(it.label)}</a>`
+          : it.kind === "person"
+          ? `<span class="mention mention-person" data-person="${it.id}" contenteditable="false">@${U.escapeHtml(it.label)}</span>`
+          : `<span class="mention mention-date" data-date="${it.id}" contenteditable="false">📅 ${U.escapeHtml(U.formatDate(it.id))}</span>`;
+      b.text = before + html + "&nbsp;" + after;
+      close();
+      touch();
+      render();
+      focusBlock(b.id);
+    }
+
+    function openFor(block, contentEl, at) {
+      close();
+      ctx = { block, contentEl, at };
+      node = U.el("div", { class: "menu mention-menu" });
+      node.style.width = "290px";
+      document.body.append(node);
+      paint("");
+      const r = contentEl.getBoundingClientRect();
+      node.style.left = U.clamp(r.left, 8, window.innerWidth - 300) + "px";
+      node.style.top = (window.innerHeight - r.bottom > 320 ? r.bottom + 6 : Math.max(8, r.top - 326)) + "px";
+      const typed = (contentEl.textContent || "").slice(at + 1, U.caretOffset(contentEl));
+      if (typed) paint(typed);
     }
 
     function handleKey(e) {
@@ -266,6 +451,15 @@ const Editor = (() => {
             });
             return true;
           } },
+        block.type.startsWith("heading") && {
+          label: block.collapsible ? "Quitar el desplegable" : "Convertir en encabezado desplegable",
+          icon: ICONS.toggle,
+          onClick: () => {
+            block.collapsible = !block.collapsible;
+            if (block.collapsible) block.open = true;
+            touch(); render();
+          },
+        },
         { label: "Color", icon: ICONS.palette, onClick: (e) => {
             const r = e.currentTarget.getBoundingClientRect();
             Menus.colorMenu({
@@ -291,12 +485,13 @@ const Editor = (() => {
   }
 
   function moveBlock(id, delta) {
-    const i = blockIndex(id);
+    const list = listOf(id);
+    const i = list.findIndex((b) => b.id === id);
     const j = i + delta;
-    if (i < 0 || j < 0 || j >= page.blocks.length) return;
+    if (i < 0 || j < 0 || j >= list.length) return;
     Store.snapshot();
-    const [b] = page.blocks.splice(i, 1);
-    page.blocks.splice(j, 0, b);
+    const [b] = list.splice(i, 1);
+    list.splice(j, 0, b);
     touch();
     render();
   }
@@ -322,10 +517,14 @@ const Editor = (() => {
       wrap.classList.remove("is-dragover-top", "is-dragover-bottom");
       if (!dragId || dragId === block.id) return;
       Store.snapshot();
-      const from = blockIndex(dragId);
-      const [moved] = page.blocks.splice(from, 1);
-      let to = blockIndex(block.id) + (after ? 1 : 0);
-      page.blocks.splice(to, 0, moved);
+      const fromList = listOf(dragId);
+      const from = fromList.findIndex((b) => b.id === dragId);
+      if (from < 0) return;
+      const [moved] = fromList.splice(from, 1);
+      const toList = listOf(block.id);
+      const to = toList.findIndex((b) => b.id === block.id) + (after ? 1 : 0);
+      toList.splice(to, 0, moved);
+      ownerOf.set(moved.id, toList);
       dragId = null;
       touch();
       render();
@@ -333,7 +532,7 @@ const Editor = (() => {
   }
 
   /* ------------------------- Render de un bloque -------------------------- */
-  function renderBlock(block, index) {
+  function renderBlock(block, index, list = page.blocks) {
     // El color de un destacado tiñe su caja, no el texto del bloque
     const textColor = block.type === "callout" ? "default" : block.color || "default";
     const wrap = U.el("div", {
@@ -435,7 +634,7 @@ const Editor = (() => {
         if (block.type === "numbered") {
           let n = 1;
           for (let i = index - 1; i >= 0; i--) {
-            const prev = page.blocks[i];
+            const prev = list[i];
             if (prev.type === "numbered" && prev.indent === block.indent) n++;
             else if ((prev.indent || 0) < (block.indent || 0)) continue;
             else break;
@@ -446,6 +645,22 @@ const Editor = (() => {
           U.el("div", { class: "block-marker", text: block.type === "numbered" ? label : "" }),
           makeContent()
         );
+        break;
+      }
+
+      case "heading1":
+      case "heading2":
+      case "heading3": {
+        if (block.collapsible) {
+          wrap.append(
+            U.el("button", {
+              class: "toggle-arrow heading-arrow" + (block.open === false ? "" : " open"),
+              html: ICONS.chevronRight,
+              onclick: () => { block.open = block.open === false; touch(); render(); },
+            })
+          );
+        }
+        wrap.append(makeContent());
         break;
       }
 
@@ -640,6 +855,65 @@ const Editor = (() => {
             )
           );
         }
+        break;
+      }
+
+      case "columns": {
+        const row = U.el("div", { class: "columns-row" });
+        (block.cols || []).forEach((col, ci) => {
+          const colHost = U.el("div", {
+            class: "column",
+            style: { flexBasis: (col.width || 100 / block.cols.length) + "%" },
+          });
+          const inner = U.el("div", { class: "column-inner" });
+          if (!col.blocks || !col.blocks.length) col.blocks = [Store.makeBlock()];
+          renderList(col.blocks, inner);
+          inner.append(
+            U.el("button", {
+              class: "column-add", html: ICONS.plus + "<span>Añadir bloque</span>",
+              onclick: () => {
+                const b = Store.makeBlock();
+                col.blocks.push(b);
+                touch();
+                render();
+                focusBlock(b.id);
+              },
+            })
+          );
+          colHost.append(inner);
+
+          // Divisor arrastrable entre columnas
+          if (ci < block.cols.length - 1) {
+            const divider = U.el("div", { class: "column-divider" });
+            divider.addEventListener("mousedown", (e) => {
+              e.preventDefault();
+              const startX = e.clientX;
+              const total = row.offsetWidth;
+              const a = block.cols[ci], b2 = block.cols[ci + 1];
+              const aStart = a.width || 100 / block.cols.length;
+              const bStart = b2.width || 100 / block.cols.length;
+              const onMove = (ev) => {
+                const deltaPct = ((ev.clientX - startX) / total) * 100;
+                const aNew = U.clamp(aStart + deltaPct, 12, aStart + bStart - 12);
+                a.width = aNew;
+                b2.width = aStart + bStart - aNew;
+                colHost.style.flexBasis = a.width + "%";
+                colHost.nextElementSibling.nextElementSibling.style.flexBasis = b2.width + "%";
+              };
+              const onUp = () => {
+                document.removeEventListener("mousemove", onMove);
+                document.removeEventListener("mouseup", onUp);
+                touch();
+              };
+              document.addEventListener("mousemove", onMove);
+              document.addEventListener("mouseup", onUp);
+            });
+            row.append(colHost, divider);
+          } else {
+            row.append(colHost);
+          }
+        });
+        wrap.append(row);
         break;
       }
 
@@ -905,6 +1179,35 @@ const Editor = (() => {
         wrap.append(Database.render(page, block));
         break;
 
+      case "linked-db": {
+        const source = block.sourcePageId ? Store.getPage(block.sourcePageId) : null;
+        if (!source || !source.db) {
+          wrap.append(
+            U.el("div", {
+              class: "image-empty", html: ICONS.table + "<span>Elige la base de datos a mostrar</span>",
+              onclick: () => pickLinkedSource(block),
+            })
+          );
+          break;
+        }
+        const box = U.el("div", { class: "linked-db" });
+        box.append(
+          U.el("div", { class: "linked-bar" },
+            U.el("span", { html: ICONS.link }),
+            U.el("span", { text: `Vista enlazada de «${source.title || "Sin título"}»` }),
+            U.el("button", { class: "btn", text: "Ir al original", onclick: () => Store.open(source.id) }),
+            U.el("button", { class: "btn", text: "Cambiar", onclick: () => pickLinkedSource(block) })),
+          Database.render(source, block, { linked: true })
+        );
+        wrap.append(box);
+        break;
+      }
+
+      case "table": {
+        wrap.append(renderSimpleTable(block));
+        break;
+      }
+
       case "subpage": {
         const child = block.pageId ? Store.getPage(block.pageId) : null;
         wrap.append(
@@ -925,6 +1228,109 @@ const Editor = (() => {
         wrap.append(makeContent());
     }
     return wrap;
+  }
+
+  /** Elige la base de datos de origen de una vista enlazada. */
+  function pickLinkedSource(block) {
+    const sources = Object.values(Store.state.pages).filter((p) => !p.deleted && p.db);
+    Menus.open({
+      x: window.innerWidth / 2 - 130, y: 160, width: 280, searchable: true,
+      items: [
+        { type: "label", label: "Mostrar la base de datos de…" },
+        ...sources.map((p) => ({
+          label: `${p.icon || "📄"} ${U.escapeHtml(p.title || "Sin título")}`,
+          sub: p.db.name,
+          active: block.sourcePageId === p.id,
+          onClick: () => { block.sourcePageId = p.id; touch(); render(); },
+        })),
+      ],
+    });
+  }
+
+  /** Tabla de texto sin base de datos detrás. */
+  function renderSimpleTable(block) {
+    const table = U.el("table", { class: "simple-table" + (block.headerRow ? " head-row" : "") + (block.headerCol ? " head-col" : "") });
+    const body = U.el("tbody");
+
+    (block.rows || []).forEach((row, r) => {
+      const tr = U.el("tr");
+      row.forEach((cell, c) => {
+        const td = U.el(r === 0 && block.headerRow ? "th" : "td", {},
+          U.el("div", {
+            class: "st-cell", contenteditable: page.share?.locked ? "false" : "true",
+            spellcheck: "false", html: cell || "",
+            oninput: (e) => { block.rows[r][c] = U.sanitizeInline(e.target.innerHTML); Store.save(); },
+            onkeydown: (e) => {
+              e.stopPropagation();
+              if (e.key === "Tab") {
+                e.preventDefault();
+                const cells = [...table.querySelectorAll(".st-cell")];
+                const i = cells.indexOf(e.target);
+                const next = cells[i + (e.shiftKey ? -1 : 1)];
+                if (next) U.placeCaret(next, true);
+              }
+            },
+          })
+        );
+        tr.append(td);
+      });
+      // Control de fila
+      tr.append(
+        U.el("td", { class: "st-ctl" },
+          U.el("button", {
+            class: "st-btn", html: ICONS.dots, title: "Fila",
+            onclick: (e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              Menus.open({
+                x: rect.left - 160, y: rect.bottom + 4, width: 200,
+                items: [
+                  { label: "Insertar fila encima", icon: ICONS.plus,
+                    onClick: () => { block.rows.splice(r, 0, block.rows[r].map(() => "")); touch(); render(); } },
+                  { label: "Insertar fila debajo", icon: ICONS.plus,
+                    onClick: () => { block.rows.splice(r + 1, 0, block.rows[r].map(() => "")); touch(); render(); } },
+                  { type: "separator" },
+                  { label: "Eliminar fila", icon: ICONS.trash, danger: true,
+                    onClick: () => { if (block.rows.length > 1) { block.rows.splice(r, 1); touch(); render(); } } },
+                ],
+              });
+            },
+          })
+        )
+      );
+      body.append(tr);
+    });
+
+    table.append(body);
+
+    const tools = U.el(
+      "div", { class: "st-tools" },
+      U.el("button", {
+        class: "btn", html: ICONS.plus + "<span>Fila</span>",
+        onclick: () => { block.rows.push(block.rows[0].map(() => "")); touch(); render(); },
+      }),
+      U.el("button", {
+        class: "btn", html: ICONS.plus + "<span>Columna</span>",
+        onclick: () => { block.rows.forEach((r) => r.push("")); touch(); render(); },
+      }),
+      U.el("button", {
+        class: "btn", text: "Quitar columna",
+        onclick: () => {
+          if (block.rows[0].length <= 1) return;
+          block.rows.forEach((r) => r.pop());
+          touch(); render();
+        },
+      }),
+      U.el("button", {
+        class: "btn" + (block.headerRow ? " is-on" : ""), text: "Encabezado de fila",
+        onclick: () => { block.headerRow = !block.headerRow; touch(); render(); },
+      }),
+      U.el("button", {
+        class: "btn" + (block.headerCol ? " is-on" : ""), text: "Encabezado de columna",
+        onclick: () => { block.headerCol = !block.headerCol; touch(); render(); },
+      })
+    );
+
+    return U.el("div", { class: "st-wrap" }, U.el("div", { class: "st-scroll" }, table), tools);
   }
 
   /** Abre el selector de medios para un bloque de imagen. */
@@ -1026,6 +1432,9 @@ const Editor = (() => {
     const keepVersion = U.debounce(() => Store.recordVersion(page.id, "Edición"), 2500);
 
     const sync = () => {
+      // El blur se dispara mientras se reconstruye el DOM, con el nodo viejo
+      // todavía conectado: escribir ahí pisaría el contenido nuevo.
+      if (rendering || !node.isConnected) return;
       block.text = node.dataset.plain ? node.textContent : U.sanitizeInline(node.innerHTML);
       node.dataset.empty = String(!node.textContent.trim());
       Store.save();
@@ -1036,6 +1445,11 @@ const Editor = (() => {
       sync();
       if (applyMarkdown(block, node)) return;
       // Menú "/" en vivo
+      if (Mention.isOpen()) {
+        const at = Mention.ctx?.at ?? 0;
+        const q = (node.textContent || "").slice(at + 1, U.caretOffset(node));
+        if (q.length > 24 || Mention.paint(q) === 0) Mention.close();
+      }
       if (Slash.isOpen()) {
         const at = Slash.ctx?.slashAt ?? 0;
         const q = (node.textContent || "").slice(at + 1, U.caretOffset(node));
@@ -1046,6 +1460,13 @@ const Editor = (() => {
 
     node.addEventListener("keydown", (e) => {
       if (Slash.handleKey(e)) return;
+      if (Mention.handleKey(e)) return;
+
+      if (e.key === "@" && !e.ctrlKey && !e.metaKey) {
+        const at = U.caretOffset(node);
+        setTimeout(() => Mention.openFor(block, node, at), 0);
+        return;
+      }
 
       if (e.key === "/" && !e.ctrlKey && !e.metaKey) {
         const at = U.caretOffset(node);
@@ -1081,11 +1502,12 @@ const Editor = (() => {
       }
 
       if (e.key === "Backspace" && U.atStart(node)) {
-        const i = blockIndex(block.id);
+        const siblings = listOf(block.id);
+        const i = siblings.findIndex((b) => b.id === block.id);
         if (block.indent > 0) { e.preventDefault(); block.indent--; touch(); render(); focusBlock(block.id, false); return; }
         if (block.type !== "paragraph") { e.preventDefault(); setType(block.id, "paragraph"); return; }
         if (i > 0) {
-          const prev = page.blocks[i - 1];
+          const prev = siblings[i - 1];
           if (NON_TEXT.includes(prev.type)) {
             e.preventDefault();
             Store.snapshot();
@@ -1096,7 +1518,7 @@ const Editor = (() => {
           Store.snapshot();
           const prevText = prev.text || "";
           prev.text = prevText + (block.text || "");
-          page.blocks.splice(i, 1);
+          siblings.splice(i, 1);
           touch();
           render();
           requestAnimationFrame(() => {
@@ -1138,10 +1560,11 @@ const Editor = (() => {
       }
 
       if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-        const i = blockIndex(block.id);
+        const nearby = listOf(block.id);
+        const i = nearby.findIndex((b) => b.id === block.id);
         const goUp = e.key === "ArrowUp";
         if ((goUp && U.atStart(node)) || (!goUp && U.atEnd(node))) {
-          const target = page.blocks[i + (goUp ? -1 : 1)];
+          const target = nearby[i + (goUp ? -1 : 1)];
           if (target) {
             const el2 = root.querySelector(`[data-id="${target.id}"] .block-content`);
             if (el2) { e.preventDefault(); U.placeCaret(el2, goUp); }
@@ -1209,7 +1632,9 @@ const Editor = (() => {
       sync();
       lines.slice(1).forEach((line) => {
         const b = Store.makeBlock("paragraph", { text: U.escapeHtml(line), indent: block.indent });
-        page.blocks.splice(blockIndex(anchor) + 1, 0, b);
+        const list = listOf(anchor);
+        list.splice(list.findIndex((x) => x.id === anchor) + 1, 0, b);
+        ownerOf.set(b.id, list);
         anchor = b.id;
       });
       touch();
@@ -1225,6 +1650,13 @@ const Editor = (() => {
       }
       Menus.showFormatBar(sel.getRangeAt(0).getBoundingClientRect(), node);
     };
+    node.addEventListener("click", (e) => {
+      const mention = e.target.closest?.(".mention-page");
+      if (mention?.dataset.page) {
+        e.preventDefault();
+        Store.open(mention.dataset.page);
+      }
+    });
     node.addEventListener("mouseup", () => setTimeout(maybeBar, 0));
     node.addEventListener("keyup", (e) => {
       if (e.shiftKey || e.key.startsWith("Arrow")) setTimeout(maybeBar, 0);
@@ -1282,35 +1714,76 @@ const Editor = (() => {
   }
 
   /* --------------------------- Render de la página ------------------------ */
-  function render() {
-    if (!page || !root) return;
-    const scroll = root.parentElement?.scrollTop;
-    root.innerHTML = "";
+  const headingLevel = (b) => (b.type.startsWith("heading") ? Number(b.type.slice(-1)) : 0);
 
+  /** Pinta una lista de bloques (la de la página o la de una columna). */
+  function renderList(list, host, { tail = false } = {}) {
     let hideUntilIndent = null;
-    page.blocks.forEach((block, i) => {
+    let hideUnderHeading = null;
+
+    list.forEach((block, i) => {
+      // Contenido plegado por un desplegable
       if (hideUntilIndent !== null) {
         if ((block.indent || 0) > hideUntilIndent) return;
         hideUntilIndent = null;
       }
-      root.append(renderBlock(block, i));
+      // Contenido plegado por un encabezado desplegable
+      if (hideUnderHeading !== null) {
+        const lvl = headingLevel(block);
+        if (!lvl || lvl > hideUnderHeading) return;
+        hideUnderHeading = null;
+      }
+
+      host.append(renderBlock(block, i, list));
+
       if (block.type === "toggle" && !block.open) hideUntilIndent = block.indent || 0;
+      if (headingLevel(block) && block.collapsible && block.open === false)
+        hideUnderHeading = headingLevel(block);
     });
 
-    root.append(
-      U.el("div", {
-        class: "blocks-tail",
-        onclick: (e) => {
-          if (e.target !== e.currentTarget) return;
-          const last = page.blocks[page.blocks.length - 1];
-          if (last && last.type === "paragraph" && !U.stripHtml(last.text).trim()) {
-            focusBlock(last.id);
-            return;
-          }
-          insertBlock(null, Store.makeBlock());
-        },
-      })
-    );
+    if (tail) {
+      host.append(
+        U.el("div", {
+          class: "blocks-tail",
+          onclick: (e) => {
+            if (e.target !== e.currentTarget) return;
+            const last = list[list.length - 1];
+            // Sólo reutiliza el último bloque si está vacío y además visible:
+            // bajo una sección plegada no hay dónde poner el cursor.
+            const visible = last && root.querySelector(`[data-id="${last.id}"]`);
+            if (visible && last.type === "paragraph" && !U.stripHtml(last.text).trim()) {
+              focusBlock(last.id);
+              return;
+            }
+            // Si el final de la lista quedó dentro de una sección plegada, se
+            // despliega para que el bloque nuevo sea visible.
+            if (last && !visible) {
+              for (let i = list.length - 1; i >= 0; i--) {
+                const b = list[i];
+                if (!headingLevel(b)) continue;
+                if (b.collapsible && b.open === false) { b.open = true; break; }
+                break;
+              }
+            }
+            insertBlock(last ? last.id : null, Store.makeBlock());
+          },
+        })
+      );
+    }
+  }
+
+  function render() {
+    if (!page || !root) return;
+    const scroll = root.parentElement?.scrollTop;
+    rendering = true;
+    try {
+      ownerOf.clear();
+      indexBlocks(page.blocks);
+      root.innerHTML = "";
+      renderList(page.blocks, root, { tail: true });
+    } finally {
+      rendering = false;
+    }
     if (scroll !== undefined && root.parentElement) root.parentElement.scrollTop = scroll;
   }
 

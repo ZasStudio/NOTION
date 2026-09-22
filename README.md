@@ -27,6 +27,11 @@ No necesita instalación: todo el estado vive en `localStorage` del navegador.
 - Tipos: texto, encabezados 1–3, viñetas, numeradas, tareas, desplegable,
   cita, destacado, divisor, código, imagen, marcador web, **bloque HTML**,
   base de datos y subpágina.
+- **Columnas** de 2, 3 o 4, con divisores arrastrables y bloques movibles entre
+  ellas; se apilan solas en móvil.
+- **Tabla simple** (sin base de datos) con encabezado de fila y de columna.
+- **Encabezados desplegables**: cualquier H1–H3 puede plegar su sección.
+- **Menciones** con `@`: páginas, personas y fechas, con autocompletado.
 - **Imágenes** con el selector completo de Notion: subir desde el equipo,
   arrastrar y soltar sobre la página, pegar con `⌘/Ctrl + V`, insertar por
   enlace o reutilizar una subida anterior. Se redimensionan arrastrando las
@@ -108,6 +113,13 @@ No necesita instalación: todo el estado vive en `localStorage` del navegador.
   última edición.
 - Filtros y ordenaciones por vista, búsqueda, plantillas de fila y vista de
   **gráfica**.
+- **Ventana lateral** (*side peek*) al abrir una fila, con su **panel de
+  propiedades** editable, igual que en Notion; desde ahí se edita el contenido
+  de la página y se sincroniza el título con la celda.
+- **Vistas enlazadas**: mostrar la base de datos de otra página, cada una con su
+  propia vista activa.
+- **Cálculos por columna** en el pie de la tabla: contar, con valor, vacíos,
+  únicos, porcentaje, suma, media, mínimo, máximo y rango.
 - **Automatizaciones**: al crear una fila o cuando una propiedad toma un valor,
   se asignan propiedades o se deja un comentario.
 

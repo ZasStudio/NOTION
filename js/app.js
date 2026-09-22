@@ -245,6 +245,7 @@ const App = (() => {
       return;
     }
     if (!force && renderedId === page.id) return;
+    if (peekId && !force) return; // el editor está prestado a la ventana lateral
     renderedId = page.id;
 
     contentEl.innerHTML = "";
@@ -373,6 +374,20 @@ const App = (() => {
     });
     top.append(title);
 
+    // Propiedades de la base de datos a la que pertenece esta página
+    if (page.dbRef) {
+      const dbPage = Store.getPage(page.dbRef.pageId);
+      if (dbPage && dbPage.db) {
+        top.append(Database.propertyPanel(dbPage, page.dbRef.rowId));
+        top.append(
+          U.el("button", {
+            class: "prop-source", html: ICONS.table + `<span>En ${U.escapeHtml(dbPage.title || "la base de datos")}</span>`,
+            onclick: () => Store.open(dbPage.id),
+          })
+        );
+      }
+    }
+
     const blocks = U.el("div", { class: "blocks" });
     body.append(blocks);
     wrap.append(body);
@@ -382,11 +397,143 @@ const App = (() => {
     if (!page.title) U.placeCaret(title, true);
   }
 
+  /* ----------------------------- Ventana lateral --------------------------- */
+  let peekId = null;
+  let peekBaseId = null;   // página principal que quedó detrás
+
+  function openPeek(pageId) {
+    const page = Store.getPage(pageId);
+    if (!page) return;
+    peekId = pageId;
+    peekBaseId = Store.state.openId;
+    Store.trackView(pageId);
+    document.body.classList.add("peek-open");
+    renderPeek();
+  }
+
+  function closePeek() {
+    if (!peekId) return;
+    peekId = null;
+    document.body.classList.remove("peek-open");
+    U.$("#peek").innerHTML = "";
+    renderPage(true); // devuelve el editor a la página principal
+  }
+
+  function renderPeek() {
+    const host = U.$("#peek");
+    const page = Store.getPage(peekId);
+    if (!host || !page) return;
+    host.innerHTML = "";
+
+    host.append(
+      U.el(
+        "div", { class: "peek-top" },
+        U.el("button", {
+          class: "icon-btn", html: ICONS.doubleChevronRight, title: "Cerrar",
+          onclick: closePeek,
+        }),
+        U.el("button", {
+          class: "icon-btn", html: ICONS.expand, title: "Abrir como página",
+          onclick: () => { const id = peekId; closePeek(); Store.open(id); },
+        }),
+        U.el("div", { class: "peek-crumb" },
+          ...Store.pathOf(page.id).slice(-2).flatMap((p, i, arr) => [
+            i ? U.el("span", { class: "crumb-sep", text: "/" }) : null,
+            U.el("button", { class: "crumb-link", text: p.title || "Sin título",
+              onclick: () => { closePeek(); Store.open(p.id); } }),
+          ].filter(Boolean))),
+        U.el("button", {
+          class: "icon-btn", html: ICONS.comment, title: "Comentarios",
+          onclick: () => Collab.togglePanel(true),
+        }),
+        U.el("button", {
+          class: "icon-btn", html: ICONS.dots, title: "Más",
+          onclick: (e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            Menus.open({
+              x: r.left - 200, y: r.bottom + 4, width: 230,
+              items: [
+                { label: "Abrir como página", icon: ICONS.expand,
+                  onClick: () => { const id = peekId; closePeek(); Store.open(id); } },
+                { label: "Copiar enlace", icon: ICONS.link,
+                  onClick: () => { navigator.clipboard?.writeText(location.origin + location.pathname + "#" + page.id); U.toast("Enlace copiado"); } },
+                { label: "Duplicar", icon: ICONS.duplicate, onClick: () => { Store.duplicatePage(page.id); U.toast("Duplicada"); } },
+                { type: "separator" },
+                { label: "Mover a la papelera", icon: ICONS.trash, danger: true,
+                  onClick: () => { Store.deletePage(page.id); closePeek(); } },
+              ],
+            });
+          },
+        })
+      )
+    );
+
+    const body = U.el("div", { class: "peek-body" });
+    const inner = U.el("div", { class: "peek-page" });
+
+    const isImageIcon = page.icon && (page.icon.startsWith("asset:") || /^https?:\/\//.test(page.icon));
+    const icon = U.el("div", {
+      class: "peek-icon" + (isImageIcon ? " is-image" : ""),
+      text: isImageIcon ? "" : page.icon || "📄",
+      onclick: (e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        Menus.emojiMenu({
+          x: r.left, y: r.bottom + 6,
+          onPick: (emo) => { Store.updatePage(page.id, { icon: emo }); renderPeek(); },
+          onRemove: () => { Store.updatePage(page.id, { icon: "" }); renderPeek(); },
+          onUpload: () => Assets.pick({
+            anchor: icon, tabs: ["upload", "link", "recent"],
+            onPick: (value) => { Store.updatePage(page.id, { icon: value }); renderPeek(); },
+          }),
+        });
+      },
+    });
+    if (isImageIcon) Assets.attach(icon, page.icon, "background");
+
+    const title = U.el("h1", {
+      class: "peek-title", contenteditable: "true", spellcheck: "false", text: page.title,
+      dataset: { placeholder: "Sin título", empty: String(!page.title) },
+    });
+    title.addEventListener("input", () => {
+      title.dataset.empty = String(!title.textContent.trim());
+      const p = Store.state.pages[page.id];
+      p.title = title.textContent;
+      p.updatedAt = new Date().toISOString();
+      // Mantiene sincronizado el título con la celda de la base de datos
+      if (p.dbRef) {
+        const dbPage = Store.getPage(p.dbRef.pageId);
+        const row = dbPage?.db?.rows.find((r) => r.id === p.dbRef.rowId);
+        const tp = dbPage?.db?.props.find((x) => x.type === "title");
+        if (row && tp) row.cells[tp.id] = p.title;
+      }
+      Store.emit();
+    });
+
+    inner.append(icon, title);
+
+    if (page.dbRef) {
+      const dbPage = Store.getPage(page.dbRef.pageId);
+      if (dbPage && dbPage.db) inner.append(Database.propertyPanel(dbPage, page.dbRef.rowId));
+    }
+
+    const blocks = U.el("div", { class: "blocks" });
+    inner.append(U.el("div", { class: "peek-divider" }), blocks);
+    body.append(inner);
+    host.append(body);
+
+    Editor.mount(page, blocks);
+  }
+
   /* ------------------------------- Atajos --------------------------------- */
   function initShortcuts() {
     document.addEventListener("keydown", (e) => {
       const mod = e.metaKey || e.ctrlKey;
       if (Editor.handleSelectionKey(e)) return;
+      if (e.key === "Escape" && peekId && !document.querySelector(".overlay, .menu, .ai-panel")) {
+        e.preventDefault();
+        closePeek();
+        return;
+      }
       if (mod && e.key.toLowerCase() === "j") {
         e.preventDefault();
         const page = Store.getPage(Store.state.openId);
@@ -454,6 +601,13 @@ const App = (() => {
 
     Store.subscribe(() => {
       renderTopbar();
+      // Navegar a otra página cierra la ventana lateral
+      if (peekId && Store.state.openId !== peekBaseId) {
+        peekId = null;
+        document.body.classList.remove("peek-open");
+        U.$("#peek").innerHTML = "";
+        renderPage(true);
+      }
       renderPage();
       if (Collab.panelOpen) Collab.renderPanel();
     });
@@ -468,7 +622,10 @@ const App = (() => {
     if (!Store.state.seenAnnouncement) setTimeout(Modals.cooking, 600);
   }
 
-  return { boot, setTheme, toggleTheme, toggleSidebar, renderPage, renderTopbar, exportMarkdown, blockToMarkdown };
+  return {
+    boot, setTheme, toggleTheme, toggleSidebar, renderPage, renderTopbar,
+    exportMarkdown, blockToMarkdown, openPeek, closePeek,
+  };
 })();
 
 document.addEventListener("DOMContentLoaded", App.boot);
