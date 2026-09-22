@@ -1,0 +1,153 @@
+/* ============================ Bases de datos ============================ */
+/* El bloque de base de datos ocupa el ancho del contenido y desplaza dentro */
+.block-table-db { display: block; }
+.db { margin: 8px 0 20px; min-width: 0; max-width: 100%; }
+
+.db-header { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--divider); }
+.db-views { display: flex; align-items: center; gap: 2px; flex: 1; overflow-x: auto; }
+.db-view-tab {
+  display: flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 8px; border-radius: var(--radius-sm);
+  font-size: 14px; color: var(--text-secondary); white-space: nowrap;
+}
+.db-view-tab:hover { background: var(--hover); }
+.db-view-tab.is-active { color: var(--text); box-shadow: inset 0 -2px 0 var(--text); border-radius: 0; }
+.db-tools { display: flex; align-items: center; gap: 2px; }
+.db-tools .btn { height: 28px; font-size: 14px; color: var(--text-secondary); padding: 0 8px; }
+.db-search { width: 0; opacity: 0; transition: width 150ms var(--ease), opacity 150ms; }
+.db-search.open { width: 150px; opacity: 1; }
+.db-search input {
+  width: 100%; height: 26px; border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm); background: var(--bg-input);
+  padding: 0 8px; font-size: 13px; outline: none;
+}
+
+.db-body { overflow-x: auto; padding-top: 2px; }
+
+/* ------------------------------- Tabla -------------------------------- */
+.db-table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.db-table th, .db-table td {
+  border-right: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
+  padding: 0; vertical-align: top;
+}
+.db-table th:last-child, .db-table td:last-child { border-right: 0; }
+.db-table th {
+  font-weight: 400; color: var(--text-secondary); text-align: left;
+  height: 33px; white-space: nowrap;
+}
+.db-th-inner { display: flex; align-items: center; gap: 6px; padding: 0 8px; height: 32px; }
+.db-th-inner:hover { background: var(--hover); }
+.db-table td { min-width: 100px; }
+.db-cell {
+  min-height: 32px; padding: 6px 8px; outline: none;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.db-cell:hover { background: var(--hover); }
+.db-cell[contenteditable="true"]:focus { box-shadow: inset 0 0 0 2px var(--accent); background: var(--bg); }
+.db-cell-title { font-weight: 500; }
+.db-row:hover .row-open { opacity: 1; }
+.row-open {
+  opacity: 0; font-size: 12px; color: var(--text-secondary);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  padding: 1px 8px; margin-left: auto;
+}
+.db-add-row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  height: 33px; padding: 0 8px; color: var(--text-secondary); font-size: 14px;
+  border-bottom: 1px solid var(--divider);
+}
+.db-add-row:hover { background: var(--hover); }
+.db-count { font-size: 13px; color: var(--text-tertiary); padding: 6px 8px; }
+
+/* Tags / select */
+.tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 8px; border-radius: 20px;
+  font-size: 12px; line-height: 18px; max-width: 100%;
+  background: var(--b-gray); color: var(--text);
+}
+.tag-x { cursor: pointer; color: var(--text-secondary); font-size: 11px; }
+
+.checkbox-cell {
+  width: 16px; height: 16px; border: 1.3px solid var(--text-secondary);
+  border-radius: 3px; display: grid; place-items: center; cursor: pointer;
+}
+.checkbox-cell[data-checked="true"] { background: var(--accent); border-color: var(--accent); }
+.checkbox-cell svg { width: 12px; height: 12px; color: #fff; opacity: 0; }
+.checkbox-cell[data-checked="true"] svg { opacity: 1; }
+
+/* ------------------------------- Board -------------------------------- */
+.db-board { display: flex; gap: 16px; padding: 12px 0; align-items: flex-start; }
+.board-col { width: 260px; flex: none; }
+.board-col.drop-target .board-cards { background: var(--hover); border-radius: var(--radius); }
+.board-col-head {
+  display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 4px;
+}
+.board-count { font-size: 13px; color: var(--text-tertiary); }
+.board-cards { display: flex; flex-direction: column; gap: 8px; min-height: 40px; padding: 4px 0; }
+.board-card {
+  background: var(--bg-elevated); border-radius: var(--radius);
+  box-shadow: var(--shadow-card); padding: 8px 10px; cursor: pointer;
+}
+.board-card:hover { background: var(--hover); }
+.board-card-title { font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+.board-card-meta { display: flex; flex-wrap: wrap; gap: 4px; }
+.board-add {
+  display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 6px;
+  color: var(--text-secondary); font-size: 14px; border-radius: var(--radius-sm); width: 100%;
+}
+.board-add:hover { background: var(--hover); }
+
+/* ------------------------------ Galería -------------------------------- */
+.db-gallery {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px; padding: 14px 0;
+}
+.gallery-card {
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  overflow: hidden; cursor: pointer; background: var(--bg-elevated);
+}
+.gallery-card:hover { background: var(--hover); }
+.gallery-cover {
+  height: 120px; background: var(--b-gray); background-size: cover; background-position: center;
+  display: grid; place-items: center; font-size: 34px;
+}
+.gallery-body { padding: 8px 10px 12px; }
+.gallery-title { font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+
+/* ------------------------------- Lista --------------------------------- */
+.db-list { padding: 8px 0; }
+.list-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 8px; border-bottom: 1px solid var(--divider);
+  border-radius: var(--radius-sm); cursor: pointer; font-size: 14px;
+}
+.list-row:hover { background: var(--hover); }
+.list-row .list-title { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-meta { display: flex; gap: 6px; align-items: center; color: var(--text-secondary); font-size: 12px; }
+
+/* ----------------------------- Calendario ------------------------------ */
+.db-calendar { padding: 10px 0; }
+.cal-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.cal-title { font-size: 14px; font-weight: 600; flex: 1; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--divider); border-left: 1px solid var(--divider); }
+.cal-dow {
+  font-size: 12px; color: var(--text-secondary); padding: 4px 6px;
+  border-right: 1px solid var(--divider); border-bottom: 1px solid var(--divider);
+}
+.cal-day {
+  min-height: 92px; padding: 4px; border-right: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider); display: flex; flex-direction: column; gap: 4px;
+}
+.cal-day.other { background: var(--hover); }
+.cal-daynum { font-size: 12px; color: var(--text-secondary); }
+.cal-day.today .cal-daynum {
+  background: var(--accent); color: #fff; border-radius: 50%;
+  width: 20px; height: 20px; display: grid; place-items: center;
+}
+.cal-event {
+  font-size: 12px; background: var(--bg-elevated); box-shadow: var(--shadow-card);
+  border-radius: var(--radius-sm); padding: 2px 6px; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

@@ -1,0 +1,235 @@
+/* ======================= Menús contextuales / popovers ================== */
+.menu {
+  position: fixed; z-index: 400; min-width: 220px; max-width: 320px;
+  max-height: 60vh; overflow-y: auto;
+  background: var(--bg-elevated); border-radius: var(--radius);
+  box-shadow: var(--shadow-menu); padding: 6px 0;
+  font-size: 14px;
+  animation: pop 100ms var(--ease);
+}
+@keyframes pop { from { opacity: 0; transform: translateY(-4px); } }
+
+.menu-label {
+  font-size: 12px; color: var(--text-tertiary); font-weight: 500;
+  padding: 6px 14px 4px;
+}
+.menu-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 6px 14px; text-align: left; color: var(--text); min-height: 28px;
+}
+.menu-item:hover, .menu-item.is-active { background: var(--hover); }
+.menu-item .icon { color: var(--text-secondary); }
+.menu-item .menu-hint { margin-left: auto; font-size: 12px; color: var(--text-tertiary); }
+.menu-item .menu-sub { font-size: 12px; color: var(--text-tertiary); display: block; }
+.menu-item-body { min-width: 0; flex: 1; }
+.menu-sep { height: 1px; background: var(--divider); margin: 6px 0; }
+.menu-swatch {
+  width: 20px; height: 20px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong); display: grid; place-items: center;
+  font-size: 13px; font-weight: 600;
+}
+.menu-input {
+  width: calc(100% - 16px); margin: 4px 8px 6px; height: 28px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  background: var(--bg-input); padding: 0 8px; font-size: 14px; outline: none;
+}
+.menu-input:focus { border-color: var(--accent); }
+.menu-thumb {
+  width: 46px; height: 46px; flex: none; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); display: grid; place-items: center;
+  background: var(--bg); color: var(--text-secondary);
+}
+
+/* Barra flotante de formato */
+.format-bar {
+  position: fixed; z-index: 450;
+  display: flex; align-items: center; gap: 2px;
+  background: var(--bg-elevated); border-radius: var(--radius);
+  box-shadow: var(--shadow-menu); padding: 4px; height: 33px;
+}
+.format-bar button {
+  height: 25px; min-width: 25px; padding: 0 6px; border-radius: var(--radius-sm);
+  color: var(--text); display: grid; place-items: center; font-size: 14px;
+}
+.format-bar button:hover { background: var(--hover); }
+.format-bar button.is-on { color: var(--accent); }
+.format-bar .sep { width: 1px; height: 18px; background: var(--divider); margin: 0 3px; }
+
+/* ================================ Modales =============================== */
+.overlay {
+  position: fixed; inset: 0; z-index: 500;
+  background: var(--bg-overlay);
+  display: grid; place-items: center;
+  animation: fade 120ms var(--ease);
+}
+@keyframes fade { from { opacity: 0; } }
+.overlay.top { align-items: flex-start; padding-top: 12vh; }
+
+.modal {
+  background: var(--bg-elevated); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-menu); overflow: hidden;
+  animation: rise 140ms var(--ease);
+}
+@keyframes rise { from { opacity: 0; transform: translateY(10px) scale(0.98); } }
+
+/* ---------------------------- Buscador (⌘K) ---------------------------- */
+.search-modal { width: min(680px, 92vw); display: flex; flex-direction: column; max-height: 70vh; }
+.search-input-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px; border-bottom: 1px solid var(--divider);
+}
+.search-input-row input {
+  flex: 1; border: 0; outline: none; background: transparent; font-size: 16px;
+}
+.search-results { overflow-y: auto; padding: 6px 0 10px; }
+.search-empty { padding: 20px 16px; color: var(--text-tertiary); font-size: 14px; }
+.search-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 8px 16px; text-align: left;
+}
+.search-item:hover, .search-item.is-active { background: var(--hover); }
+.search-item .s-title { font-size: 14px; }
+.search-item .s-crumb { font-size: 12px; color: var(--text-tertiary); }
+.search-foot {
+  border-top: 1px solid var(--divider); padding: 8px 16px;
+  font-size: 12px; color: var(--text-tertiary); display: flex; gap: 14px;
+}
+
+/* --------------------------- Galería plantillas ------------------------- */
+.tpl-modal { width: min(1040px, 94vw); height: min(680px, 88vh); display: flex; }
+.tpl-side { width: 240px; flex: none; background: var(--bg-sidebar); padding: 20px 12px; overflow-y: auto; }
+.tpl-side h3 { font-size: 13px; color: var(--text-tertiary); margin: 0 0 8px 8px; font-weight: 500; }
+.tpl-cat {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 8px; border-radius: var(--radius-sm); font-size: 14px;
+  color: var(--text-secondary); text-align: left;
+}
+.tpl-cat:hover { background: var(--hover); }
+.tpl-cat.is-active { background: var(--active); color: var(--text); font-weight: 500; }
+.tpl-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.tpl-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 18px 24px 12px; border-bottom: 1px solid var(--divider);
+}
+.tpl-head h2 { margin: 0; font-size: 20px; font-weight: 600; flex: 1; }
+.tpl-grid {
+  flex: 1; overflow-y: auto; padding: 20px 24px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px;
+  /* max-content evita que las filas se encojan para caber en el alto del modal */
+  grid-auto-rows: max-content;
+  align-content: start;
+}
+.tpl-card {
+  display: flex; flex-direction: column; align-items: stretch; cursor: pointer;
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  overflow: hidden; text-align: left; transition: box-shadow var(--speed);
+}
+.tpl-preview { flex: none; }
+.tpl-card:hover { box-shadow: var(--shadow-card); }
+.tpl-preview {
+  height: 120px; display: grid; place-items: center; font-size: 36px;
+  background: var(--b-gray);
+}
+.tpl-info { padding: 10px 12px 14px; }
+.tpl-name { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+.tpl-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.45; }
+
+/* ------------------------ Modal "We've been cooking" -------------------- */
+.cooking-modal {
+  width: min(840px, 94vw);
+  background: #191919;
+  color: #fff;
+  border-radius: var(--radius-xl);
+  display: grid; grid-template-columns: 1.05fr 1.35fr;
+  gap: 24px; padding: 40px 0 26px 34px;
+  position: relative; overflow: hidden;
+}
+.cooking-close {
+  position: absolute; top: 12px; right: 12px; z-index: 3;
+  width: 28px; height: 28px; border-radius: var(--radius-sm);
+  display: grid; place-items: center; color: rgba(255,255,255,0.5);
+}
+.cooking-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
+
+.cooking-eyebrow {
+  font-family: "Brush Script MT", "Segoe Script", cursive;
+  font-style: italic; font-size: 20px; letter-spacing: 0.04em;
+  color: #5b9cf8; text-transform: uppercase; margin-bottom: 10px;
+}
+.cooking-title { font-size: 32px; font-weight: 700; line-height: 1.15; margin: 0 0 22px; }
+
+.cooking-list { display: flex; flex-direction: column; }
+.cooking-row {
+  display: flex; align-items: flex-start; gap: 12px; width: 100%;
+  padding: 13px 8px 13px 0; text-align: left;
+  border-bottom: 1px solid rgba(255,255,255,0.11);
+  color: rgba(255,255,255,0.85); font-size: 14px;
+}
+.cooking-row:first-child { border-top: 1px solid rgba(255,255,255,0.11); }
+.cooking-row:hover { color: #fff; }
+.cooking-row .icon { color: rgba(255,255,255,0.6); margin-top: 2px; }
+.cooking-row .cr-body { flex: 1; line-height: 1.45; }
+.cooking-row .cr-body strong { font-weight: 600; color: #fff; }
+.cooking-row .cr-chevron { color: rgba(255,255,255,0.4); margin-top: 2px; }
+.cooking-row .chip {
+  background: #2383e2; color: #fff; margin-left: 8px;
+  font-size: 11px; padding: 1px 7px;
+}
+
+.cooking-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 26px; padding-right: 8px; }
+.cooking-actions .btn { height: 40px; justify-content: center; font-size: 15px; border-radius: var(--radius); }
+.cooking-actions .btn-secondary { background: #2f2f2f; color: #fff; }
+.cooking-actions .btn-secondary:hover { background: #3a3a3a; }
+
+.cooking-art { position: relative; min-height: 350px; }
+.cooking-mascot {
+  position: absolute; top: -18px; left: 46%; z-index: 2;
+  width: 96px; height: 96px;
+}
+.cooking-stack { position: absolute; inset: 44px 0 26px 0; }
+.cooking-pane {
+  position: absolute; background: #fbfbfa; color: #37352f;
+  border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+  overflow: hidden; font-size: 9px;
+}
+.cooking-pane .pane-bar {
+  display: flex; align-items: center; gap: 4px;
+  padding: 5px 7px; font-size: 7px; color: #9b9a97;
+  border-bottom: 1px solid #ededec;
+}
+.cooking-pane .pane-body { padding: 10px 12px; }
+.pane-1 { left: 0; top: 56px; width: 120px; height: 250px; }
+.pane-2 { left: 92px; top: 30px; width: 170px; height: 280px; }
+.pane-3 { left: 196px; top: 0; width: 300px; height: 330px; }
+.pane-h { font-size: 13px; font-weight: 600; margin: 8px 0 10px; }
+.pane-sec { font-size: 10px; font-weight: 600; margin: 10px 0 5px; }
+.pane-li { font-size: 8px; color: #6b6a66; line-height: 1.7; padding-left: 9px; position: relative; }
+.pane-li::before { content: "•"; position: absolute; left: 0; }
+.pane-icon { font-size: 14px; }
+
+.mini-grid { display: grid; grid-template-columns: repeat(11, 9px); gap: 2px; margin-top: 10px; }
+.mini-cell { width: 9px; height: 9px; border-radius: 1px; background: #e8e8e6; }
+.mini-cell.on { background: #2f6fe4; }
+.mini-cell.dot { background: #f5c63f; border-radius: 50%; }
+
+.pane-avatar {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: linear-gradient(135deg, #d9730d, #c14c8a); margin-bottom: 6px;
+}
+.pane-line { height: 5px; border-radius: 3px; background: #ececea; margin: 5px 0; }
+.pane-line.s { width: 55%; }
+.pane-card { border: 1px solid #ececea; border-radius: 4px; padding: 6px; margin-top: 6px; }
+
+@media (max-width: 720px) {
+  .cooking-modal { grid-template-columns: 1fr; padding: 34px 20px 22px; }
+  .cooking-art { display: none; }
+}
+
+/* Toast */
+.toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+  z-index: 600; background: var(--bg-elevated); color: var(--text);
+  box-shadow: var(--shadow-menu); border-radius: var(--radius);
+  padding: 10px 16px; font-size: 14px;
+  animation: rise 140ms var(--ease);
+}
