@@ -459,6 +459,21 @@ const App = (() => {
           class: "icon-btn", html: ICONS.comment, title: "Comentarios",
           onclick: () => Collab.togglePanel(true),
         }),
+        page.templateRef
+          ? U.el("button", {
+              class: "btn btn-primary", text: "Guardar en la plantilla",
+              onclick: () => {
+                const dbPage = Store.getPage(page.templateRef.pageId);
+                const tpl = dbPage?.db?.templates?.find((t) => t.id === page.templateRef.templateId);
+                if (!tpl) return U.toast("La plantilla ya no existe");
+                tpl.blocks = JSON.parse(JSON.stringify(page.blocks));
+                tpl.icon = page.icon || tpl.icon;
+                Store.deletePage(page.id);
+                closePeek();
+                U.toast(`«${tpl.name}» actualizada con ${tpl.blocks.length} bloques`);
+              },
+            })
+          : null,
         U.el("button", {
           class: "icon-btn", html: ICONS.dots, title: "Más",
           onclick: (e) => {
@@ -600,7 +615,7 @@ const App = (() => {
     contentEl = U.$("#content");
     topbarEl = U.$("#topbar");
 
-    if (window.innerWidth < 760) document.body.classList.add("sidebar-collapsed");
+    if (window.innerWidth <= 760) document.body.classList.add("sidebar-collapsed");
 
     Sidebar.mount(U.$("#sidebar"));
     initResizer();
@@ -614,7 +629,13 @@ const App = (() => {
     renderTopbar();
     renderPage(true);
 
+    // En móvil el lateral es un cajón: navegar a otra página lo cierra
+    let lastOpenId = Store.state.openId;
     Store.subscribe(() => {
+      if (Store.state.openId !== lastOpenId) {
+        lastOpenId = Store.state.openId;
+        if (window.innerWidth <= 760) document.body.classList.add("sidebar-collapsed");
+      }
       renderTopbar();
       // Navegar a otra página cierra la ventana lateral
       if (peekId && Store.state.openId !== peekBaseId) {

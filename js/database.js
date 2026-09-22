@@ -47,6 +47,12 @@ const Database = (() => {
 
   const titleProp = () => db.props.find((p) => p.type === "title") || db.props[0];
 
+  /** Propiedades que esta vista muestra (la de título siempre se ve). */
+  function shownProps(view = activeView()) {
+    const hidden = view?.hiddenProps || [];
+    return db.props.filter((p) => p.type === "title" || !hidden.includes(p.id));
+  }
+
   /** Una vista enlazada recuerda su propia vista activa en el bloque. */
   const activeViewId = () => (linked && block?.activeView) || db.activeView;
   const activeView = () => db.views.find((v) => v.id === activeViewId()) || db.views[0];
@@ -692,7 +698,7 @@ const Database = (() => {
     const thead = U.el("thead");
     const hrow = U.el("tr");
 
-    db.props.forEach((prop) => {
+    shownProps().forEach((prop) => {
       const th = U.el(
         "th", {},
         U.el(
@@ -827,7 +833,7 @@ const Database = (() => {
     const tbody = U.el("tbody");
     visibleRows().forEach((row) => {
       const tr = U.el("tr", { class: "db-row" });
-      db.props.forEach((prop) => tr.append(U.el("td", {}, renderCell(row, prop))));
+      shownProps().forEach((prop) => tr.append(U.el("td", {}, renderCell(row, prop))));
       tr.append(
         U.el(
           "td", {},
@@ -862,7 +868,7 @@ const Database = (() => {
     // Pie con cálculos por columna, como en Notion
     const foot = U.el("tfoot");
     const frow = U.el("tr", { class: "db-calc-row" });
-    db.props.forEach((prop) => {
+    shownProps().forEach((prop) => {
       const view = activeView();
       view.calcs = view.calcs || {};
       const fn = view.calcs[prop.id] || "none";
@@ -975,7 +981,7 @@ const Database = (() => {
           U.el("div", { class: "board-card-title", text: row.cells[tp.id] || "Sin título" }),
           U.el(
             "div", { class: "board-card-meta" },
-            ...db.props
+            ...shownProps()
               .filter((p) => p.id !== tp.id && p.id !== groupProp.id)
               .flatMap((p) => {
                 const v = row.cells[p.id];
@@ -1047,7 +1053,7 @@ const Database = (() => {
             U.el("div", { class: "gallery-title", text: row.cells[tp.id] || "Sin título" }),
             U.el(
               "div", { class: "board-card-meta" },
-              ...db.props
+              ...shownProps()
                 .filter((p) => ["select", "multi_select", "date"].includes(p.type))
                 .flatMap((p) => {
                   const v = row.cells[p.id];
@@ -1080,7 +1086,7 @@ const Database = (() => {
           U.el("span", { class: "list-title", text: row.cells[tp.id] || "Sin título" }),
           U.el(
             "span", { class: "list-meta" },
-            ...db.props
+            ...shownProps()
               .filter((p) => ["select", "date", "person"].includes(p.type) && row.cells[p.id])
               .map((p) =>
                 U.el("span", {
@@ -1164,6 +1170,27 @@ const Database = (() => {
   }
 
   /* --------------------------- Plantillas de fila -------------------------- */
+  /** Crea una fila desde una plantilla, con su contenido de página si lo trae. */
+  function addRowFromTemplate(tpl) {
+    const row = addRow({ ...tpl.cells }, { silent: true });
+    if (tpl.blocks && tpl.blocks.length) {
+      const tp = titleProp();
+      const sub = Store.createPage({
+        title: row.cells[tp.id] || tpl.name,
+        icon: tpl.icon || "📄",
+        parentId: page.id,
+        blocks: JSON.parse(JSON.stringify(tpl.blocks)).map((b) => ({ ...b, id: U.uid("b") })),
+      });
+      sub.dbRef = { pageId: page.id, rowId: row.id };
+      row.pageId = sub.id;
+      dirty();
+    }
+    repaint();
+    U.toast(`Fila creada desde «${tpl.name}»`);
+    if (row.pageId) App.openPeek(row.pageId);
+    return row;
+  }
+
   function templatesModal() {
     db.templates = db.templates || [];
     const list = U.el("div", { class: "auto-list" });
@@ -1188,7 +1215,22 @@ const Database = (() => {
                 .map((p) => `${p.name}: ${Array.isArray(t.cells[p.id]) ? t.cells[p.id].join(", ") : t.cells[p.id]}`)
                 .join(" · ") || "Sin valores" })
             ),
-            U.el("button", { class: "btn", text: "Usar", onclick: () => { addRow({ ...t.cells }); modal.close(); } }),
+            U.el("button", { class: "btn", text: "Editar contenido",
+              onclick: () => {
+                // El contenido se edita en una página real y se vuelve a guardar
+                const draft = Store.createPage({
+                  title: t.name, icon: t.icon || "📄", parentId: page.id,
+                  blocks: (t.blocks && t.blocks.length)
+                    ? JSON.parse(JSON.stringify(t.blocks)).map((b) => ({ ...b, id: U.uid("b") }))
+                    : [Store.makeBlock("heading2", { text: "Estructura" }), Store.makeBlock()],
+                });
+                draft.templateRef = { pageId: page.id, templateId: t.id };
+                modal.close();
+                App.openPeek(draft.id);
+                U.toast("Edita el contenido y pulsa «Guardar en la plantilla»");
+              } }),
+            U.el("button", { class: "btn btn-primary", text: "Usar",
+              onclick: () => { addRowFromTemplate(t); modal.close(); } }),
             U.el("button", {
               class: "icon-btn", html: ICONS.trash,
               onclick: () => { db.templates.splice(i, 1); dirty(); paint2(); },
@@ -1212,11 +1254,17 @@ const Database = (() => {
             const source = visibleRows()[0];
             if (!source) return U.toast("No hay filas que guardar");
             const tp = titleProp();
+            const sourcePage = source.pageId ? Store.getPage(source.pageId) : null;
             db.templates.push({
-              id: U.uid("t"), name: source.cells[tp.id] || "Plantilla",
+              id: U.uid("t"),
+              name: source.cells[tp.id] || "Plantilla",
+              icon: sourcePage?.icon || "📄",
               cells: { ...source.cells },
+              // La plantilla se lleva también el contenido de la página
+              blocks: sourcePage ? JSON.parse(JSON.stringify(sourcePage.blocks)) : [],
             });
             dirty(); paint2();
+            U.toast("Plantilla guardada con su contenido");
           },
         }))
     );
@@ -1299,6 +1347,16 @@ const Database = (() => {
     if (!prop) return true;
     const raw = valueOf(row, prop);
     const value = Array.isArray(raw) ? raw.join(", ") : raw === undefined || raw === null ? "" : String(raw);
+
+    // Un filtro puede llevar varios valores: basta con que coincida uno
+    if (Array.isArray(f.value)) {
+      if (!f.value.length) return true;
+      const cells = Array.isArray(raw) ? raw.map(String) : [value];
+      const hit = f.value.some((v) =>
+        cells.some((c) => c.toLowerCase() === String(v).toLowerCase()));
+      return f.op === "is_not" || f.op === "not_contains" ? !hit : hit;
+    }
+
     const needle = String(f.value ?? "");
     switch (f.op) {
       case "contains": return value.toLowerCase().includes(needle.toLowerCase());
@@ -1354,27 +1412,55 @@ const Database = (() => {
 
     v.filters.forEach((f, i) => {
       const prop = db.props.find((p) => p.id === f.propId);
+      const shown = Array.isArray(f.value)
+        ? (f.value.length ? f.value.join(", ") : "cualquiera")
+        : String(f.value ?? "");
       items.push({
-        label: `${U.escapeHtml(prop?.name || "?")} ${OPERATORS.find((o) => o.id === f.op)?.name || ""} ${U.escapeHtml(String(f.value ?? ""))}`,
+        label: `${U.escapeHtml(prop?.name || "?")} ${OPERATORS.find((o) => o.id === f.op)?.name || ""} ${U.escapeHtml(shown)}`,
         icon: ICONS.filter,
         onClick: (e) => {
           const r = e.currentTarget.getBoundingClientRect();
+          const hasOptions = prop && ["select", "multi_select"].includes(prop.type);
           Menus.open({
-            x: r.right + 4, y: r.top, width: 230,
+            x: r.right + 4, y: r.top, width: 240,
             items: [
-              ...OPERATORS.map((op) => ({
-                label: op.name, active: op.id === f.op,
-                onClick: () => { f.op = op.id; dirty(); repaint(); },
-              })),
+              ...OPERATORS.filter((op) => !hasOptions || ["is", "is_not", "empty", "not_empty"].includes(op.id))
+                .map((op) => ({
+                  label: op.name, active: op.id === f.op,
+                  onClick: () => { f.op = op.id; dirty(); repaint(); },
+                })),
               { type: "separator" },
-              {
-                type: "custom",
-                node: U.el("input", {
-                  class: "menu-input", placeholder: "Valor…", value: f.value || "",
-                  oninput: (ev) => { f.value = ev.target.value; dirty(); },
-                  onkeydown: (ev) => { ev.stopPropagation(); if (ev.key === "Enter") { Menus.closeAll(); repaint(); } },
-                }),
-              },
+              ...(hasOptions
+                ? [
+                    { type: "label", label: "Valores (marca varios)" },
+                    ...prop.options.map((o) => {
+                      const list = Array.isArray(f.value) ? f.value : f.value ? [f.value] : [];
+                      return {
+                        label: `<span class="tag b-${o.color}">${U.escapeHtml(o.name)}</span>`,
+                        active: list.includes(o.name),
+                        onClick: () => {
+                          const next = list.includes(o.name)
+                            ? list.filter((x) => x !== o.name)
+                            : [...list, o.name];
+                          f.value = next;
+                          dirty();
+                          repaint();
+                          return true;
+                        },
+                      };
+                    }),
+                  ]
+                : [
+                    {
+                      type: "custom",
+                      node: U.el("input", {
+                        class: "menu-input", placeholder: "Valor…",
+                        value: Array.isArray(f.value) ? "" : f.value || "",
+                        oninput: (ev) => { f.value = ev.target.value; dirty(); },
+                        onkeydown: (ev) => { ev.stopPropagation(); if (ev.key === "Enter") { Menus.closeAll(); repaint(); } },
+                      }),
+                    },
+                  ]),
               { type: "separator" },
               { label: "Quitar filtro", icon: ICONS.trash, danger: true,
                 onClick: () => { v.filters.splice(i, 1); dirty(); repaint(); } },
@@ -1396,7 +1482,8 @@ const Database = (() => {
           items: db.props.map((p) => ({
             label: p.name,
             onClick: () => {
-              v.filters.push({ propId: p.id, op: "contains", value: "" });
+              const multi = ["select", "multi_select"].includes(p.type);
+              v.filters.push({ propId: p.id, op: multi ? "is" : "contains", value: multi ? [] : "" });
               dirty(); repaint();
             },
           })),
@@ -1526,6 +1613,40 @@ const Database = (() => {
           },
         }),
         U.el("button", {
+          class: "btn", html: ICONS.settings +
+            ((activeView().hiddenProps?.length) ? `<span>${db.props.length - activeView().hiddenProps.length}</span>` : ""),
+          title: "Propiedades visibles",
+          onclick: (e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            const v = activeView();
+            v.hiddenProps = v.hiddenProps || [];
+            Menus.open({
+              x: r.left - 120, y: r.bottom + 4, width: 250,
+              items: [
+                { type: "label", label: "Mostrar en esta vista" },
+                ...db.props.map((p) => ({
+                  label: p.name,
+                  icon: (PROP_TYPES.find((t) => t.id === p.type) || { icon: ICONS.text }).icon,
+                  active: p.type === "title" || !v.hiddenProps.includes(p.id),
+                  sub: p.type === "title" ? "siempre visible" : null,
+                  onClick: () => {
+                    if (p.type === "title") return true;
+                    v.hiddenProps = v.hiddenProps.includes(p.id)
+                      ? v.hiddenProps.filter((x) => x !== p.id)
+                      : [...v.hiddenProps, p.id];
+                    dirty();
+                    repaint();
+                    return true;
+                  },
+                })),
+                { type: "separator" },
+                { label: "Mostrar todas", icon: ICONS.check,
+                  onClick: () => { v.hiddenProps = []; dirty(); repaint(); } },
+              ],
+            });
+          },
+        }),
+        U.el("button", {
           class: "btn", html: ICONS.filter + (activeView().filters?.length ? `<span>${activeView().filters.length}</span>` : ""),
           title: "Filtrar",
           onclick: (e) => {
@@ -1576,7 +1697,8 @@ const Database = (() => {
                 { type: "label", label: "Plantillas de fila" },
                 ...(db.templates || []).map((t) => ({
                   label: t.name, icon: ICONS.template,
-                  onClick: () => { addRow({ ...t.cells }); U.toast(`Fila creada desde «${t.name}»`); },
+                  sub: t.blocks?.length ? `${t.blocks.length} bloques` : "solo propiedades",
+                  onClick: () => { addRowFromTemplate(t); },
                 })),
                 ...(db.templates && db.templates.length ? [] : [{ type: "label", label: "Aún no hay plantillas" }]),
                 { type: "separator" },

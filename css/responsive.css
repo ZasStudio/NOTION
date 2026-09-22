@@ -1,0 +1,170 @@
+/* ==========================================================================
+   Adaptación de pantalla — paneles a pantalla completa en PC y móvil
+   Se carga al final: ajusta lo que definen layout/editor/database/pro/glass.
+   ========================================================================== */
+
+/* ==========================================================================
+   1. Monitores grandes: la página usa el ancho real de la pantalla
+   ========================================================================== */
+@media (min-width: 1280px) { :root { --content-width: 800px; } }
+@media (min-width: 1600px) { :root { --content-width: 900px; } }
+@media (min-width: 1920px) { :root { --content-width: 1020px; } }
+@media (min-width: 2400px) { :root { --content-width: 1180px; } }
+
+/* En pantallas anchas las bases de datos, imágenes anchas y columnas se salen
+   del ancho de lectura para aprovechar el monitor sin alargar los párrafos. */
+@media (min-width: 1280px) {
+  .page-body {
+    /* Espacio libre a cada lado del contenido, con tope para no pegarse al borde */
+    --breakout: clamp(0px, calc((100vw - var(--sidebar-width) - var(--content-width)) / 2 - 56px), 260px);
+  }
+  body.sidebar-collapsed .page-body { --breakout: clamp(0px, calc((100vw - var(--content-width)) / 2 - 56px), 300px); }
+  body.peek-open .page-body,
+  body.comments-open .page-body { --breakout: 0px; }
+
+  .page-body .block-table-db {
+    margin-left: calc(var(--breakout) * -1);
+    margin-right: calc(var(--breakout) * -1);
+  }
+  .page-full .page-body .block-table-db { margin-left: 0; margin-right: 0; }
+}
+
+/* Vista lateral y comentarios más amplios cuando hay sitio */
+@media (min-width: 1600px) {
+  body.peek-open #peek { width: min(820px, 46vw); }
+  body.comments-open #comments { width: 360px; }
+}
+
+/* La ventana lateral también respira en pantallas grandes */
+@media (min-width: 1440px) { .peek-page { max-width: 760px; } }
+
+/* ==========================================================================
+   2. Tablet: menos relleno lateral, herramientas que envuelven
+   ========================================================================== */
+@media (max-width: 1024px) {
+  .db-header { flex-wrap: wrap; row-gap: 2px; }
+  .db-tools { flex-wrap: wrap; }
+  .tpl-side { width: 190px; }
+}
+
+/* ==========================================================================
+   3. Móvil (≤ 760px)
+   ========================================================================== */
+@media (max-width: 760px) {
+  :root { --content-width: 100%; }
+
+  /* Alturas reales en móvil (barra del navegador incluida) */
+  #app { height: 100svh; }
+
+  /* --- Cajón lateral --- */
+  #sidebar { width: min(86vw, 320px); z-index: 60; padding-bottom: env(safe-area-inset-bottom); }
+  body:not(.sidebar-collapsed) #main::after { z-index: 50; }
+  .sb-item, .tree-row { height: 38px; }
+  .tree-toggle, .tree-actions { opacity: 1; }
+  .tree-toggle, .tree-actions .icon-btn { width: 30px; height: 30px; }
+
+  /* --- Barra superior --- */
+  #topbar { height: 48px; padding: 0 6px; gap: 2px; }
+  #topbar .icon-btn { width: 34px; height: 34px; }
+  .crumb { max-width: 46vw; }
+  /* Sólo el último nivel de la ruta cabe en pantalla */
+  .breadcrumb .crumb:not(:last-child), .breadcrumb .crumb-sep { display: none; }
+  .topbar-actions .btn span { display: none; }
+  .topbar-actions .btn { padding: 0 8px; min-width: 34px; height: 34px; }
+
+  /* --- Página --- */
+  .page-body { padding: 0 16px; }
+  .page-full .page-body { padding: 0 16px; }
+  .page-cover { height: 22vh; }
+  .cover-actions { padding-right: 16px; opacity: 1; }
+  .page-icon { font-size: 56px; }
+  .page-title { font-size: 30px; }
+  .page-top { padding-top: 28px; }
+  .page-controls { opacity: 1; }
+
+  /* El gutter vive fuera de pantalla a la izquierda: en móvil se ancla a la
+     derecha del bloque y aparece al tocarlo (no hay hover en pantalla táctil). */
+  .block-gutter {
+    left: auto; right: 0; top: -2px;
+    background: var(--bg-elevated); border-radius: var(--radius);
+    box-shadow: var(--shadow-card); padding: 1px;
+  }
+  .block:focus-within > .block-gutter,
+  .block.is-selected > .block-gutter { opacity: 1; pointer-events: auto; }
+  .gutter-btn { width: 32px; height: 32px; }
+  .column-inner .block-gutter, .peek-page .block-gutter { left: auto; right: 0; }
+
+  /* --- Bases de datos --- */
+  .db-view-tab, .db-tools .btn { height: 34px; }
+  .db-body { -webkit-overflow-scrolling: touch; }
+  .db-table td { min-width: 132px; }
+  .db-cell { min-height: 38px; }
+  .db-board { gap: 8px; }
+  .db-gallery { grid-template-columns: 1fr !important; }
+  .row-open { opacity: 1; }
+
+  /* --- Vista lateral y comentarios a pantalla completa --- */
+  body.peek-open #peek { width: 100vw; position: absolute; inset: 0; z-index: 70; }
+  .peek-page { padding: 20px 16px 30vh; }
+  body.comments-open #comments {
+    position: absolute; inset: auto 0 0 0; width: 100%; height: 70svh;
+    z-index: 70; border-left: 0; border-top: 1px solid var(--border);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  }
+
+  /* --- Panel de IA y selector de medios: hojas inferiores --- */
+  .ai-panel, .media-picker {
+    top: auto !important; bottom: 0 !important; left: 0 !important; right: 0 !important;
+    width: 100% !important; max-width: none;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    max-height: 84svh; padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    animation: sheet-up 180ms var(--ease);
+  }
+  .media-body { max-height: 62svh; }
+  @keyframes sheet-up { from { transform: translateY(100%); } }
+
+  /* --- Menús contextuales: también como hoja --- */
+  .menu {
+    left: 0 !important; right: 0 !important; top: auto !important; bottom: 0 !important;
+    max-width: none; width: 100%; max-height: 72svh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+    animation: sheet-up 160ms var(--ease);
+  }
+  .menu-item { min-height: 42px; padding: 8px 18px; }
+  .menu-input { height: 38px; font-size: 16px; }
+
+  /* --- Modales --- */
+  .overlay { place-items: end stretch; }
+  .overlay.top { padding-top: 0; }
+  .modal { border-radius: var(--radius-xl) var(--radius-xl) 0 0; max-height: 92svh; }
+  .search-modal { width: 100%; max-height: 88svh; }
+  .search-input-row input { font-size: 16px; }
+  .tpl-modal { width: 100%; height: 92svh; flex-direction: column; }
+  .tpl-side {
+    width: 100%; display: flex; gap: 6px; overflow-x: auto; padding: 10px;
+    border-bottom: 1px solid var(--divider);
+  }
+  .tpl-side h3 { display: none; }
+  .tpl-cat { width: auto; white-space: nowrap; }
+  .tpl-grid { grid-template-columns: 1fr; padding: 14px; gap: 14px; }
+  .cooking-modal { max-height: 92svh; overflow-y: auto; }
+
+  /* --- Barra de formato al alcance del pulgar --- */
+  .format-bar { height: 40px; }
+  .format-bar button { height: 32px; min-width: 32px; }
+
+  /* Evita el zoom de iOS al enfocar un campo */
+  input, textarea, select { font-size: 16px; }
+}
+
+/* Móvil muy estrecho */
+@media (max-width: 380px) {
+  .page-title { font-size: 26px; }
+  .page-body { padding: 0 12px; }
+}
+
+/* Pantallas táctiles: los controles que dependían de :hover quedan visibles */
+@media (hover: none) {
+  .page-controls, .cover-actions, .tree-actions, .sb-section .icon-btn { opacity: 1; }
+}

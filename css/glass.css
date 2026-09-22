@@ -148,10 +148,14 @@
 :root[data-skin="glass"] .format-bar,
 :root[data-skin="glass"] .toast,
 :root[data-skin="glass"] .page {
-  position: relative;
+  /* Nada de `position: relative` aquí: menús, paneles y la barra de formato
+     ya son `fixed` y perderían el anclaje a la ventana (se iban al alto del
+     documento en páginas largas). El `::after` sólo necesita que el elemento
+     esté posicionado, y `.page` lo consigue abajo. */
   -webkit-backdrop-filter: var(--blur);
   backdrop-filter: var(--blur);
 }
+:root[data-skin="glass"] .page { position: relative; }
 
 :root[data-skin="glass"] .menu::after,
 :root[data-skin="glass"] .modal::after,
