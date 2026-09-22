@@ -886,6 +886,27 @@ const Editor = (() => {
             Assets.attach(media, block.src);
             media.addEventListener("error", () =>
               frame.append(U.el("div", { class: "image-broken", text: "No se pudo cargar el vídeo." })));
+
+            // Clic en el vídeo: reproducir o pausar, como en Notion
+            media.addEventListener("click", (e) => {
+              // Los controles nativos ocupan la franja inferior: ahí no interferimos
+              const r = media.getBoundingClientRect();
+              if (e.clientY > r.bottom - 42) return;
+              if (media.paused) media.play().catch(() => {});
+              else media.pause();
+            });
+            media.addEventListener("play", () => frame.classList.add("is-playing"));
+            media.addEventListener("pause", () => frame.classList.remove("is-playing"));
+
+            // Si aún no hay carátula, se captura el primer fotograma
+            if (!block.poster) {
+              Assets.posterOf(block.src).then((poster) => {
+                if (!poster) return;
+                block.poster = poster;
+                media.poster = poster;
+                touch();
+              });
+            }
           }
           if (block.ratio) frame.style.setProperty("--ratio", block.ratio);
 
@@ -948,6 +969,13 @@ const Editor = (() => {
           );
 
           frame.append(media, tools);
+          if (!stream) {
+            const playBtn = U.el("button", {
+              class: "video-play", html: ICONS.play, title: "Reproducir",
+              onclick: () => media.play().catch(() => {}),
+            });
+            frame.append(playBtn);
+          }
           wrap.append(U.el("div", { class: "image-wrap video-wrap" }, frame, makeContent("image-caption")));
         } else {
           const empty = U.el("div", {
@@ -1987,7 +2015,8 @@ const Editor = (() => {
     });
     container.addEventListener("drop", async (e) => {
       const files = [...(e.dataTransfer?.files || [])];
-      if (!files.length) return;
+      if (!files.length || e.__zasFiles) return;
+      e.__zasFiles = true;                       // un solo manejador por soltada
       e.preventDefault();
       container.classList.remove("is-file-over");
 
@@ -1998,19 +2027,62 @@ const Editor = (() => {
 
       for (const file of files) {
         const isImage = /^image\//.test(file.type);
+        const isVideo = /^video\//.test(file.type);
         const saved = await Assets.save(file);
         const made = isImage
           ? Store.makeBlock("image", { src: saved.ref })
+          : isVideo
+          ? Store.makeBlock("video", { src: saved.ref, fileName: file.name })
           : Store.makeBlock("file", {
               src: saved.ref, fileName: file.name, fileSize: Assets.fmtSize(saved.size),
             });
+        // El primer fotograma se guarda como carátula para verlo antes de darle al play
+        if (isVideo) Assets.posterOf(saved.ref).then((poster) => {
+          if (!poster) return;
+          made.poster = poster;
+          touch();
+          render();
+        });
         const at = cursor ? blockIndex(cursor) + 1 : page.blocks.length;
         page.blocks.splice(at, 0, made);
         cursor = made.id;
       }
       touch();
       render();
-      U.toast(files.length > 1 ? `${files.length} archivos añadidos` : "Archivo añadido");
+      U.toast(files.length > 1 ? `${files.length} archivos añadidos`
+        : /^video\//.test(files[0].type) ? "Vídeo añadido"
+        : /^image\//.test(files[0].type) ? "Imagen añadida" : "Archivo añadido");
+    });
+  }
+
+  /** Pegar un archivo de imagen o vídeo lo inserta como bloque. */
+  function bindPaste(container) {
+    container.addEventListener("paste", async (e) => {
+      if (e.__zasFiles) return;
+      const items = [...(e.clipboardData?.items || [])];
+      const item = items.find((i) => /^(image|video)\//.test(i.type));
+      if (!item) return;
+      const file = item.getAsFile();
+      if (!file) return;
+      e.preventDefault();
+      e.__zasFiles = true;
+      const isVideo = /^video\//.test(file.type);
+      const saved = await Assets.save(file);
+      const near = document.activeElement?.closest?.(".block");
+      const made = Store.makeBlock(isVideo ? "video" : "image",
+        { src: saved.ref, fileName: file.name });
+      Store.snapshot();
+      const at = near?.dataset.id ? blockIndex(near.dataset.id) + 1 : page.blocks.length;
+      page.blocks.splice(at, 0, made);
+      if (isVideo) Assets.posterOf(saved.ref).then((poster) => {
+        if (!poster) return;
+        made.poster = poster;
+        touch();
+        render();
+      });
+      touch();
+      render();
+      U.toast(isVideo ? "Vídeo pegado" : "Imagen pegada");
     });
   }
 
@@ -2020,6 +2092,17 @@ const Editor = (() => {
     selection.clear();
     render();
     bindPageDrop(container);
+    bindPaste(container);
+    // También se puede soltar o pegar en el resto de la página, no sólo sobre
+    // los bloques: el área en blanco de abajo es donde más se suelta.
+    [container.closest(".page"), container.closest("#content"), container.closest(".peek-body")]
+      .filter((el, i, all) => el && el !== container && all.indexOf(el) === i)
+      .forEach((el) => {
+        if (el.dataset.zasDrop) return;          // no duplicar al repintar
+        el.dataset.zasDrop = "1";
+        bindPageDrop(el);
+        bindPaste(el);
+      });
   }
 
   return {

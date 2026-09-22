@@ -26,6 +26,7 @@ const Store = (() => {
     seenAnnouncement: false,
     seenTour: false,
     isNew: false,
+    mediaQuality: "original",   // «optimized» recomprime las fotos grandes
     recent: [],
 
     /* --- Funciones avanzadas: todas activas, sin planes ni cobros --- */

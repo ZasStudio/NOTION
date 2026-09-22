@@ -51,13 +51,23 @@ Notion (se guardan como `ico:nombre:color` y se pintan en la página, el árbol
 lateral, la ventana lateral y las bases de datos). *Subir* abre el selector de
 medios de siempre.
 
-## Vídeo
+## Imágenes y vídeo
 
-El bloque **Vídeo** (`/video`) sube un archivo al almacén del navegador y lo
-reproduce con los controles nativos, sin conexión y sin salir de la página;
-también acepta enlaces directos y de YouTube o Vimeo, que se abren en su propio
-reproductor. Se puede arrastrar el archivo al bloque, ajustar el ancho con las
-asas, alinearlo, descargarlo y ponerle pie de foto.
+**Arrastra un vídeo a cualquier punto de la página** (o pégalo con ⌘/Ctrl + V) y
+aparece ya como reproductor, con la carátula de su primer fotograma y un botón
+de play: un clic y se ve, sin salir de la página y sin conexión. El bloque
+**Vídeo** (`/video`) hace lo mismo desde el menú y acepta además enlaces
+directos y de YouTube o Vimeo, que usan su propio reproductor. Ancho ajustable
+con las asas, alineación, descarga y pie de foto.
+
+Los archivos se guardan **con su calidad original**: nada se recomprime. En
+*Ajustes → Calidad de los archivos* puede elegirse «Optimizada» para que las
+fotos de más de 2000 px se reduzcan y ocupen menos. Los binarios viven en
+IndexedDB —que no tiene el tope de 5 MB de `localStorage`—, la app pide
+**almacenamiento persistente** para que el navegador no los desaloje y *Ajustes*
+muestra cuánto espacio queda libre. Para almacenamiento de verdad ilimitado y
+compartido entre dispositivos hace falta un backend (Postgres + S3/R2); el
+README de arquitectura del proyecto recoge la estimación de costes.
 
 ## Guía en tiempo real
 

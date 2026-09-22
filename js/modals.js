@@ -262,11 +262,42 @@ const Modals = (() => {
         U.el("button", { class: "btn btn-bordered", text: "Ver anuncio", onclick: () => { modal.close(); cooking(); } })
       ),
       row(
+        "Calidad de los archivos",
+        U.el(
+          "div", { style: { display: "flex", gap: "6px" } },
+          ...[["original", "Original"], ["optimized", "Optimizada"]].map(([id, label]) =>
+            U.el("button", {
+              class: "btn btn-bordered" + ((st.mediaQuality || "original") === id ? " is-on" : ""),
+              text: label,
+              onclick: (e) => {
+                st.mediaQuality = id;
+                Store.save();
+                [...e.currentTarget.parentElement.children].forEach((b) => b.classList.remove("is-on"));
+                e.currentTarget.classList.add("is-on");
+                U.toast(id === "original"
+                  ? "Las imágenes se guardan tal cual, sin recomprimir"
+                  : "Las fotos grandes se reducirán a 2000 px para ocupar menos");
+              },
+            }))
+        )
+      ),
+      row(
         "Archivos subidos",
         U.el(
           "div", { style: { display: "flex", alignItems: "center", gap: "10px" } },
-          U.el("span", { class: "share-mail",
-            text: `${Assets.usage().count} archivo(s) · ${Assets.fmtSize(Assets.usage().bytes)}` }),
+          (() => {
+            const label = U.el("span", { class: "share-mail",
+              text: `${Assets.usage().count} archivo(s) · ${Assets.fmtSize(Assets.usage().bytes)}` });
+            // Espacio real del navegador y si los datos están protegidos
+            Assets.quota().then(async (q) => {
+              if (!q) return;
+              const persisted = await navigator.storage?.persisted?.().catch(() => false);
+              label.textContent =
+                `${Assets.usage().count} archivo(s) · ${Assets.fmtSize(Assets.usage().bytes)} usados · ` +
+                `${Assets.fmtSize(q.free)} libres` + (persisted ? " · protegidos" : "");
+            });
+            return label;
+          })(),
           U.el("button", {
             class: "btn btn-bordered", text: "Ver",
             onclick: (e) => Assets.pick({

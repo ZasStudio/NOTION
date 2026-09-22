@@ -68,8 +68,12 @@ const Assets = (() => {
   }
 
   /* ------------------------------ Compresión ------------------------------ */
+  /** ¿Hay que optimizar? Por defecto no: se guarda el archivo tal cual. */
+  const optimizing = () => (Store.state.mediaQuality || "original") === "optimized";
+
   /** Reduce fotos grandes conservando GIF y SVG intactos. */
   async function compress(file) {
+    if (!optimizing()) return file;            // calidad original
     if (!/^image\//.test(file.type)) return file;
     if (/gif|svg/.test(file.type)) return file;
 
@@ -115,6 +119,8 @@ const Assets = (() => {
 
   /** Guarda un archivo y devuelve su referencia «asset:ID». */
   async function save(file) {
+    // La primera subida pide que el navegador no desaloje estos datos
+    if (!(Store.state.assets || []).length) persist();
     const compressed = await compress(file);
     const { w, h } = await dimensionsOf(compressed);
     const id = U.uid("as");
@@ -177,6 +183,28 @@ const Assets = (() => {
     return { count: list.length, bytes: list.reduce((n, a) => n + (a.size || 0), 0) };
   };
 
+  /** Espacio del navegador: lo usado y lo que queda (Storage API). */
+  async function quota() {
+    try {
+      const est = await navigator.storage?.estimate?.();
+      if (!est) return null;
+      return { used: est.usage || 0, total: est.quota || 0, free: (est.quota || 0) - (est.usage || 0) };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Pide almacenamiento persistente para que el navegador no borre los archivos. */
+  async function persist() {
+    try {
+      if (!navigator.storage?.persist) return false;
+      if (await navigator.storage.persisted()) return true;
+      return await navigator.storage.persist();
+    } catch {
+      return false;
+    }
+  }
+
   const fmtSize = (bytes) =>
     bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + " MB"
     : bytes >= 1024 ? Math.round(bytes / 1024) + " KB"
@@ -193,6 +221,39 @@ const Assets = (() => {
     "linear-gradient(135deg,#f5c63f,#d9730d 70%,#d44c47)",
     "linear-gradient(200deg,#e7f3f8,#9065b0)",
   ];
+
+  /** Captura el primer fotograma de un vídeo como miniatura (dataURL). */
+  function posterOf(ref) {
+    return new Promise(async (resolve) => {
+      const src = await url(ref);
+      if (!src) return resolve(null);
+      const v = document.createElement("video");
+      v.muted = true;
+      v.playsInline = true;
+      v.preload = "metadata";
+      v.src = src;
+      const fail = setTimeout(() => resolve(null), 4000);
+      v.onloadeddata = () => {
+        try {
+          v.currentTime = Math.min(0.1, (v.duration || 1) / 10);
+        } catch { resolve(null); }
+      };
+      v.onseeked = () => {
+        clearTimeout(fail);
+        try {
+          const c = document.createElement("canvas");
+          const scale = Math.min(1, 640 / (v.videoWidth || 640));
+          c.width = Math.round((v.videoWidth || 640) * scale);
+          c.height = Math.round((v.videoHeight || 360) * scale);
+          c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+          resolve(c.toDataURL("image/jpeg", 0.7));
+        } catch {
+          resolve(null);
+        }
+      };
+      v.onerror = () => { clearTimeout(fail); resolve(null); };
+    });
+  }
 
   /* ============================== Selector ================================= */
   /**
@@ -429,7 +490,7 @@ const Assets = (() => {
   }
 
   return {
-    save, url, cachedUrl, attach, remove, meta, usage, fmtSize,
-    isRef, idOf, pick, GRADIENTS, exportAll, importAll,
+    save, url, cachedUrl, attach, remove, meta, usage, quota, persist, fmtSize,
+    isRef, idOf, pick, GRADIENTS, exportAll, importAll, posterOf,
   };
 })();
