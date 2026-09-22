@@ -1,6 +1,8 @@
 /* ======================= Menús contextuales / popovers ================== */
 .menu {
-  position: fixed; z-index: 400; min-width: 220px; max-width: 320px;
+  /* Por encima de overlays (500) y del panel de IA (480): un menú se abre
+     desde dentro de un modal y tiene que poder pulsarse. */
+  position: fixed; z-index: 700; min-width: 220px; max-width: 320px;
   max-height: 60vh; overflow-y: auto;
   background: var(--bg-elevated); border-radius: var(--radius);
   box-shadow: var(--shadow-menu); padding: 6px 0;
@@ -228,7 +230,7 @@
 /* Toast */
 .toast {
   position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
-  z-index: 600; background: var(--bg-elevated); color: var(--text);
+  z-index: 800; background: var(--bg-elevated); color: var(--text);
   box-shadow: var(--shadow-menu); border-radius: var(--radius);
   padding: 10px 16px; font-size: 14px;
   animation: rise 140ms var(--ease);

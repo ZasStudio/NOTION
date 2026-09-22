@@ -467,6 +467,8 @@ const App = (() => {
       if (id && id !== Store.state.openId && Store.getPage(id)) Store.open(id);
     });
 
+    Agents.startScheduler();
+
     if (!Store.state.seenAnnouncement) setTimeout(Modals.cooking, 600);
   }
 

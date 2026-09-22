@@ -320,13 +320,47 @@ const Modals = (() => {
     return g;
   }
 
+  /** Abre una página con un bloque HTML de ejemplo listo para trastear. */
+  function htmlBlockDemo() {
+    const page = Store.createPage({
+      title: "Bloque HTML de ejemplo",
+      icon: "🧪",
+      blocks: [
+        Store.makeBlock("paragraph", { text: "Pulsa <strong>Editar código</strong> para cambiarlo en vivo." }),
+        Store.makeBlock("html", {
+          height: 300,
+          src: `<!doctype html><meta charset="utf-8">
+<style>
+  body{margin:0;font-family:ui-sans-serif,-apple-system,Segoe UI,Arial;background:#fbfbfa;color:#37352f;
+       display:grid;place-items:center;height:300px}
+  .calc{width:280px}
+  label{display:block;font-size:12px;color:#787774;margin:8px 0 2px}
+  input{width:100%;padding:7px 9px;border:1px solid #e9e9e7;border-radius:6px;font:inherit}
+  .out{margin-top:14px;padding:12px;border-radius:8px;background:#e7f3f8;font-size:13px}
+  b{font-size:20px;display:block}
+</style>
+<div class="calc">
+  <label>Horas ahorradas al mes</label><input id="h" type="number" value="320">
+  <label>Coste por hora (USD)</label><input id="r" type="number" value="95">
+  <div class="out">Ahorro mensual <b id="o">$30,400</b></div>
+</div>
+<script>
+  const f=()=>o.textContent='$'+(h.value*r.value).toLocaleString('en-US');
+  h.oninput=r.oninput=f; f();
+<\/script>`,
+        }),
+      ],
+    });
+    Store.open(page.id);
+  }
+
   function cooking() {
-    const feature = (icon, html, chip) =>
+    const feature = (icon, html, chip, action) =>
       U.el(
         "button",
         {
           class: "cooking-row",
-          onclick: () => { modal.close(); templates(); },
+          onclick: () => { modal.close(); (action || templates)(); },
         },
         U.el("span", { html: icon }),
         U.el("span", { class: "cr-body", html: html + (chip ? ` <span class="chip">${chip}</span>` : "") }),
@@ -342,10 +376,12 @@ const Modals = (() => {
         U.el("h2", { class: "cooking-title", text: "We've been cooking!" }),
         U.el(
           "div", { class: "cooking-list" },
-          feature(ICONS.sparkle, "<strong>HTML blocks</strong> bring interactive visuals to any page and we can't stop playing with them!"),
-          feature(ICONS.skills, "Skills"),
-          feature(ICONS.mcp, "MCP"),
-          feature(ICONS.routines, "Routines", "Coming soon")
+          feature(ICONS.sparkle,
+            "<strong>HTML blocks</strong> bring interactive visuals to any page and we can't stop playing with them!",
+            null, htmlBlockDemo),
+          feature(ICONS.skills, "Skills", null, () => Agents.skills()),
+          feature(ICONS.mcp, "MCP", null, () => Agents.connections()),
+          feature(ICONS.routines, "Routines", "Ya disponible", () => Agents.routines())
         ),
         U.el(
           "div", { class: "cooking-actions" },
@@ -403,5 +439,5 @@ const Modals = (() => {
     return modal;
   }
 
-  return { search, templates, trash, settings, cooking, overlay };
+  return { search, templates, trash, settings, cooking, overlay, htmlBlockDemo };
 })();

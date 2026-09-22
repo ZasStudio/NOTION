@@ -42,7 +42,43 @@ const Store = (() => {
       { id: "ts_general", name: "General", icon: "🏢", private: false, memberIds: ["me", "u_ana", "u_luis", "u_sofia"] },
     ],
 
-    /* --- Funciones de pago --- */
+    /* --- Skills, conexiones MCP y agentes --- */
+    skills: [
+      {
+        id: "sk_reunion", name: "Acta de reunión", icon: "🗒️", version: 1,
+        description: "Convierte notas sueltas en un acta con decisiones y responsables.",
+        body: "# Acta de reunión\n\nAl resumir notas de una reunión:\n\n1. Empieza por las decisiones tomadas, una por línea.\n2. Después lista los acuerdos como tareas que empiecen por un verbo.\n3. Cierra con los temas que quedaron abiertos.\n4. No inventes responsables: si la nota no dice quién, escribe «sin responsable».",
+        enabled: true, updatedAt: new Date().toISOString(),
+      },
+      {
+        id: "sk_tono", name: "Voz de Zas Studio", icon: "🎙️", version: 1,
+        description: "Mantiene el tono de la marca: directo, concreto, sin relleno.",
+        body: "# Voz de Zas Studio\n\n- Frases cortas y en voz activa.\n- Nada de superlativos vacíos ni jerga de marketing.\n- Habla de tú, nunca de usted.\n- Si una idea no aporta, se borra en vez de adornarse.",
+        enabled: true, updatedAt: new Date().toISOString(),
+      },
+    ],
+    connections: [
+      { id: "cx_slack", name: "Slack", icon: "💬", connected: false,
+        tools: ["buscar mensajes", "publicar en canal"], sample: "mensajes" },
+      { id: "cx_github", name: "GitHub", icon: "🐙", connected: false,
+        tools: ["listar issues", "abrir pull request"], sample: "issues" },
+      { id: "cx_mixpanel", name: "Mixpanel", icon: "📊", connected: false,
+        tools: ["consultar eventos", "exportar embudo"], sample: "metricas" },
+      { id: "cx_miro", name: "Miro", icon: "🧩", connected: false,
+        tools: ["listar tableros", "insertar board"], sample: "tableros" },
+      { id: "cx_box", name: "Box", icon: "📦", connected: false,
+        tools: ["buscar archivos", "adjuntar documento"], sample: "archivos" },
+      { id: "cx_mercury", name: "Mercury", icon: "🏦", connected: false,
+        tools: ["listar transacciones", "consultar saldo"], sample: "transacciones" },
+    ],
+    agents: [
+      { id: "ag_claude", name: "Claude", icon: "✳️", kind: "external", color: "orange" },
+      { id: "ag_cursor", name: "Cursor", icon: "⌨️", kind: "external", color: "blue" },
+      { id: "ag_interno", name: "Agente del espacio", icon: "🤖", kind: "internal", color: "purple" },
+    ],
+    routines: [],
+
+    /* --- Colaboración e historial --- */
     comments: {},
     versions: {},
     audit: [],
@@ -65,6 +101,10 @@ const Store = (() => {
       if (!next[key] || typeof next[key] !== "object") next[key] = {};
     }
     if (!Array.isArray(next.audit)) next.audit = [];
+    for (const key of ["skills", "connections", "agents"]) {
+      if (!Array.isArray(next[key]) || !next[key].length) next[key] = base[key];
+    }
+    if (!Array.isArray(next.routines)) next.routines = [];
     for (const page of Object.values(next.pages || {})) {
       if (page.teamspaceId === undefined) page.teamspaceId = null;
       if (!page.share) page.share = { public: false, roles: {}, locked: false };
@@ -478,6 +518,76 @@ const Store = (() => {
 
   const statsOf = (pageId) => state.stats[pageId] || { views: [] };
 
+  /* ------------------------ Skills, conexiones y agentes ------------------- */
+  const skill = (id) => state.skills.find((s) => s.id === id) || null;
+  const enabledSkills = () => state.skills.filter((s) => s.enabled);
+
+  function saveSkill(patch) {
+    if (patch.id) {
+      const existing = skill(patch.id);
+      if (existing) {
+        Object.assign(existing, patch, {
+          version: existing.version + 1,
+          updatedAt: new Date().toISOString(),
+        });
+        emit();
+        return existing;
+      }
+    }
+    const created = {
+      id: U.uid("sk"), name: "Nueva skill", icon: "✨", description: "",
+      body: "# Nueva skill\n\nEscribe aquí las instrucciones que debe seguir el modelo.",
+      version: 1, enabled: true, updatedAt: new Date().toISOString(), ...patch,
+    };
+    state.skills.push(created);
+    emit();
+    return created;
+  }
+
+  function deleteSkill(id) {
+    state.skills = state.skills.filter((s) => s.id !== id);
+    state.routines.forEach((r) => { if (r.skillId === id) r.skillId = null; });
+    emit();
+  }
+
+  const connection = (id) => state.connections.find((c) => c.id === id) || null;
+
+  function toggleConnection(id) {
+    const c = connection(id);
+    if (!c) return null;
+    c.connected = !c.connected;
+    c.lastSync = c.connected ? new Date().toISOString() : null;
+    audit("mcp.connection", `${c.name} ${c.connected ? "conectado" : "desconectado"}`);
+    emit();
+    return c;
+  }
+
+  const agent = (id) => state.agents.find((a) => a.id === id) || null;
+
+  function saveRoutine(patch) {
+    if (patch.id) {
+      const existing = state.routines.find((r) => r.id === patch.id);
+      if (existing) {
+        Object.assign(existing, patch);
+        emit();
+        return existing;
+      }
+    }
+    const created = {
+      id: U.uid("rt"), name: "Nueva rutina", agentId: state.agents[0].id,
+      status: "todo", aiAction: "summary", skillId: null, targetPageId: state.openId,
+      everyMinutes: 0, lastRun: null, runs: [], createdAt: new Date().toISOString(), ...patch,
+    };
+    state.routines.push(created);
+    emit();
+    return created;
+  }
+
+  function deleteRoutine(id) {
+    state.routines = state.routines.filter((r) => r.id !== id);
+    emit();
+  }
+
   /* ---------------------------------- API --------------------------------- */
   const api = {
     get state() { return state; },
@@ -490,6 +600,8 @@ const Store = (() => {
     addComment, replyComment, resolveComment, deleteComment, commentsOf,
     recordVersion, versionsOf, restoreVersion, snapshotOf,
     audit, trackView, statsOf,
+    skill, enabledSkills, saveSkill, deleteSkill,
+    connection, toggleConnection, agent, saveRoutine, deleteRoutine,
     reset() { localStorage.removeItem(KEY); location.reload(); },
     exportJSON: () => JSON.stringify(state, null, 2),
     importJSON(json) {

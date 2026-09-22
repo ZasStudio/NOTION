@@ -68,6 +68,19 @@ No necesita instalación: todo el estado vive en `localStorage` del navegador.
 - Bloque de IA regenerable dentro de la página y **autorrelleno de propiedades**
   en las bases de datos.
 
+**Skills, MCP y agentes** (las tres funciones que anuncia el modal de novedades)
+- **Skills**: instrucciones del equipo en formato `SKILL.md`, con versión que sube
+  al guardar. Se aplican desde el panel de IA o desde una rutina, y viajan en el
+  system prompt cuando hay clave conectada.
+- **Conexiones MCP**: Slack, GitHub, Mixpanel, Miro, Box y Mercury, cada una con
+  sus herramientas. Al conectarlas pueden traer contenido a una página nueva
+  como base de datos. En esta demo los datos son de ejemplo, no hay llamadas
+  reales a esos servicios.
+- **Rutinas y agentes**: tablero de trabajo asignado a agentes (Claude, Cursor o
+  el del espacio). Cada rutina ejecuta una acción de IA sobre una página, con una
+  skill opcional, y escribe el resultado en ella. Pueden repetirse cada 5, 15 o
+  60 minutos mientras la pestaña esté abierta.
+
 **Colaboración**
 - Comentarios por bloque con respuestas, resolución y panel lateral (`⌘⇧C`).
 - Compartir con permisos por persona (acceso total, editar, comentar, ver),
@@ -126,14 +139,14 @@ index.html
 css/  tokens.css  base.css  layout.css  editor.css  database.css
       overlays.css  pro.css
 js/   utils.js  icons.js  templates.js  store.js  charts.js  plans.js
-      menus.js  collab.js  history.js  ai.js  database.js  blocks.js
-      modals.js  sidebar.js  app.js
+      menus.js  collab.js  history.js  ai.js  agents.js  database.js
+      blocks.js  modals.js  sidebar.js  app.js
 ```
 
 `store.js` mantiene el estado (páginas, personas, espacios, comentarios,
 versiones, auditoría) y lo persiste; `blocks.js` es el editor; `database.js`
 dibuja las vistas y el motor de fórmulas, relaciones y automatizaciones;
-`ai.js` el asistente; `collab.js` compartir y comentarios; `history.js`
+`ai.js` el asistente; `agents.js` skills, conexiones MCP y rutinas; `collab.js` compartir y comentarios; `history.js`
 versiones, analíticas, auditoría y exportaciones; `charts.js` las gráficas SVG;
 `modals.js` buscador, plantillas, papelera, ajustes y el anuncio.
 

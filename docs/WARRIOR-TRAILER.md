@@ -104,6 +104,25 @@ de ideas. Modelos disponibles: Claude Opus 5, Sonnet 5 y Haiku 4.5.
 También: bloque de IA regenerable dentro de la página y **autorrelleno de
 propiedades** en las bases de datos.
 
+### Skills, MCP y agentes
+
+Las tres funciones que el anuncio de novedades promete, implementadas de verdad.
+
+**Skills.** Instrucciones del equipo escritas como `SKILL.md`, con número de
+versión que sube al guardar. Se eligen desde el panel de IA o desde una rutina;
+cuando hay clave conectada viajan en el system prompt del modelo.
+
+**Conexiones MCP.** Slack, GitHub, Mixpanel, Miro, Box y Mercury, cada una con sus
+herramientas declaradas. Al activarlas pueden traer contenido a una página nueva
+en forma de base de datos. Los datos son de ejemplo: no hay llamadas reales a
+esos servicios.
+
+**Rutinas y agentes.** Un tablero donde asignas trabajo a un agente —Claude,
+Cursor o el del espacio— con tres columnas: pendiente, en curso y listo. Cada
+rutina ejecuta una acción de IA sobre una página concreta, con una skill opcional,
+y escribe el resultado dentro de ella. Se pueden repetir cada 5, 15 o 60 minutos
+mientras la pestaña siga abierta.
+
 ### Colaboración
 
 - Comentarios por bloque con respuestas, resolución y panel lateral (`⌘⇧C`).
@@ -210,6 +229,8 @@ del espacio son datos de ejemplo guardados en el navegador.
 | El menú `/` se cerraba al escribir espacios | Se cerraba ante cualquier espacio | Ahora cierra solo si no hay coincidencias |
 | Las gráficas salían deformadas | El SVG se estiraba al 100% | Tamaño natural con `max-width` |
 | Los menús tapaban los modales | No se cerraban al abrir un modal | `Menus.closeAll()` al abrir |
+| Los submenús dentro de un modal no se podían pulsar | El `z-index` del menú quedaba por debajo del overlay | Menús a 700, por encima de modales y paneles |
+| Elegir una skill cerraba el panel de IA | El menú vive fuera del panel y disparaba el cierre por clic externo | Se ignoran los clics dentro de un `.menu` |
 
 ---
 

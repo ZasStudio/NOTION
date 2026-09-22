@@ -172,16 +172,21 @@ const AI = (() => {
   ];
 
   /** Ejecuta una acción; devuelve texto plano (líneas separadas por \n). */
-  async function run(actionId, text, custom) {
+  async function run(actionId, text, custom, skillId) {
     const action = ACTIONS.find((a) => a.id === actionId);
+    const skill = skillId ? Store.skill(skillId) : null;
     Store.state.aiUsed = (Store.state.aiUsed || 0) + 1;
-    History.log("ai.run", action ? action.name : "Pregunta libre");
+    History.log("ai.run", (action ? action.name : "Pregunta libre") + (skill ? ` · skill ${skill.name}` : ""));
 
     if (hasKey()) {
       const prompt = custom
         ? `${custom}\n\n---\nTexto de referencia:\n${text || "(vacío)"}`
         : action.prompt(text);
-      return await callClaude(prompt);
+      // Una skill son instrucciones del equipo: van en el system prompt.
+      const system = skill
+        ? `Eres el asistente de escritura de un editor tipo Notion. Responde en el mismo idioma del texto del usuario, sin preámbulos: devuelve únicamente el contenido pedido.\n\nSigue estas instrucciones del espacio de trabajo («${skill.name}», v${skill.version}):\n\n${skill.body}`
+        : undefined;
+      return await callClaude(prompt, { system });
     }
 
     // ---- Modo local ----
@@ -244,6 +249,39 @@ const AI = (() => {
       },
     });
 
+    let skillId = null;
+    const skillBtn = U.el("button", {
+      class: "ai-skill", html: ICONS.skills + "<span>Sin skill</span>",
+      title: "Aplicar una skill del espacio",
+      onclick: (e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        Menus.open({
+          x: r.left, y: r.bottom + 4, width: 250,
+          items: [
+            { type: "label", label: "Skills del espacio" },
+            { label: "Sin skill", active: !skillId, onClick: () => { skillId = null; paintSkill(); } },
+            ...Store.enabledSkills().map((s) => ({
+              label: `${s.icon} ${s.name}`, sub: s.description || `v${s.version}`,
+              active: skillId === s.id,
+              onClick: () => { skillId = s.id; paintSkill(); },
+            })),
+            { type: "separator" },
+            { label: "Gestionar skills", icon: ICONS.settings,
+              onClick: () => { closePanel(); Agents.skills(); } },
+          ],
+        });
+      },
+    });
+    const paintSkill = () => {
+      const s = skillId ? Store.skill(skillId) : null;
+      skillBtn.innerHTML = ICONS.skills + `<span>${s ? U.escapeHtml(s.name) : "Sin skill"}</span>`;
+      skillBtn.classList.toggle("is-on", !!s);
+      hint.textContent = s && !hasKey()
+        ? "Las skills guían al modelo: en modo local se ignoran."
+        : "";
+    };
+    const hint = U.el("div", { class: "ai-hint" });
+
     const listWrap = U.el("div", { class: "ai-actions" });
     const paintList = (q = "") => {
       listWrap.innerHTML = "";
@@ -270,7 +308,7 @@ const AI = (() => {
         U.el("span", { text: hasKey() ? "Claude está escribiendo…" : "Procesando…" })));
       actionsRow.innerHTML = "";
       try {
-        result = await run(actionId, sourceText, custom);
+        result = await run(actionId, sourceText, custom, skillId);
         output.innerHTML = "";
         output.append(U.el("div", { class: "ai-text", text: result }));
         actionsRow.append(
@@ -338,7 +376,9 @@ const AI = (() => {
         }),
         U.el("button", { class: "icon-btn", html: ICONS.settings, title: "Ajustes de IA", onclick: () => { closePanel(); settings(); } })
       ),
-      input, output, actionsRow, listWrap
+      input,
+      U.el("div", { class: "ai-toolbar" }, skillBtn, hint),
+      output, actionsRow, listWrap
     );
 
     document.body.append(panel);
@@ -350,7 +390,10 @@ const AI = (() => {
 
     setTimeout(() => {
       const away = (e) => {
-        if (panel && !panel.contains(e.target)) { closePanel(); document.removeEventListener("mousedown", away, true); }
+        // Los menús flotantes viven fuera del panel: elegir en uno no debe cerrarlo.
+        if (!panel || panel.contains(e.target) || e.target.closest?.(".menu")) return;
+        closePanel();
+        document.removeEventListener("mousedown", away, true);
       };
       document.addEventListener("mousedown", away, true);
     }, 0);

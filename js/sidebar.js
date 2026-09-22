@@ -208,6 +208,10 @@ const Sidebar = (() => {
           if (page) AI.open({ page, anchor: U.$("#topbar") });
         },
       }),
+      U.el("button", {
+        class: "sb-item", html: ICONS.routines + "<span>Agentes y rutinas</span>",
+        onclick: () => Agents.routines(),
+      }),
       U.el("button", { class: "sb-item", html: ICONS.settings + "<span>Ajustes</span>", onclick: Modals.settings })
     );
 
@@ -356,6 +360,8 @@ const Sidebar = (() => {
                 { label: "Búsqueda de contenido", icon: ICONS.search, onClick: History.adminSearch },
                 { label: "Exportar todo el espacio", icon: ICONS.import, onClick: History.bulkExport },
                 { label: "Ajustes de Notion AI", icon: ICONS.sparkle, onClick: AI.settings },
+                { label: "Skills del espacio", icon: ICONS.skills, onClick: () => Agents.skills() },
+                { label: "Conexiones MCP", icon: ICONS.mcp, onClick: () => Agents.connections() },
                 { type: "separator" },
                 { label: "Funciones incluidas", icon: ICONS.check, onClick: Plans.features },
               ],
