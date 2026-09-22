@@ -19,6 +19,15 @@ const App = (() => {
     Store.state.theme = theme;
     Store.emit();
   }
+
+  /** Apariencia: «glass» (cristal líquido) o «classic» (réplica fiel). */
+  function setSkin(skin) {
+    if (skin === "classic") delete document.documentElement.dataset.skin;
+    else document.documentElement.dataset.skin = "glass";
+    Store.state.skin = skin;
+    Store.emit();
+    renderPage(true);
+  }
   const toggleTheme = () => setTheme(Store.state.theme === "dark" ? "light" : "dark");
 
   /* ------------------------------ Barra lateral --------------------------- */
@@ -584,6 +593,8 @@ const App = (() => {
   function boot() {
     Store.load();
     document.documentElement.dataset.theme = Store.state.theme || "light";
+    if ((Store.state.skin || "glass") === "classic") delete document.documentElement.dataset.skin;
+    else document.documentElement.dataset.skin = "glass";
     document.documentElement.style.setProperty("--sidebar-width", (Store.state.sidebarWidth || 240) + "px");
 
     contentEl = U.$("#content");
@@ -627,7 +638,7 @@ const App = (() => {
   }
 
   return {
-    boot, setTheme, toggleTheme, toggleSidebar, renderPage, renderTopbar,
+    boot, setTheme, setSkin, toggleTheme, toggleSidebar, renderPage, renderTopbar,
     exportMarkdown, blockToMarkdown, openPeek, closePeek,
   };
 })();

@@ -14,6 +14,7 @@ const Store = (() => {
   const emptyState = () => ({
     version: SCHEMA,
     theme: "light",
+    skin: "glass",
     workspace: "Zas Studio",
     sidebarWidth: 240,
     pages: {},
@@ -94,7 +95,7 @@ const Store = (() => {
     const next = { ...base, ...prev };
     next.version = SCHEMA;
     // Campos nuevos que un estado v1 no tenía
-    for (const key of ["aiUsed", "aiKey", "aiModel", "me"]) {
+    for (const key of ["aiUsed", "aiKey", "aiModel", "me", "skin"]) {
       if (next[key] === undefined) next[key] = base[key];
     }
     for (const key of ["members", "teamspaces"]) {

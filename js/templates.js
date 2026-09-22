@@ -413,6 +413,15 @@ const Templates = (() => {
       }),
     },
     {
+      id: "proyecto-notion",
+      name: "Proyecto",
+      icon: "🛠️",
+      category: "work",
+      desc: "Espacio de proyecto con funciones, roadmap, arquitectura y decisiones.",
+      build: () => ({ title: "Réplica de Notion", icon: "🛠️", blocks: [p("")] }),
+      custom: buildProject,
+    },
+    {
       id: "panel-control",
       name: "Panel de control",
       icon: "🎛️",
@@ -516,6 +525,163 @@ const Templates = (() => {
     },
   ];
 
+  /* --------------------- Proyecto: documentación viva ---------------------- */
+  function buildProject(store, parentId = null) {
+    const featureProps = [
+      prop("Función", "title"),
+      prop("Área", "select", ["Editor", "Bases de datos", "IA", "Colaboración", "Diseño", "Espacio"]),
+      prop("Estado", "select", ["Listo", "En curso", "Pendiente"]),
+      prop("Nota", "text"),
+    ];
+    const features = db("Funciones", featureProps, [
+      ["Editor de bloques con 24 tipos", "Editor", "Listo", "Menú /, Markdown, arrastre, selección múltiple"],
+      ["Columnas y bloques anidados", "Editor", "Listo", "Destacados con hijos, divisores arrastrables"],
+      ["Imágenes con subida real", "Editor", "Listo", "IndexedDB, arrastrar, pegar, redimensionar"],
+      ["Menciones @ y tabla simple", "Editor", "Listo", "Páginas, personas y fechas"],
+      ["Cinco vistas de base de datos", "Bases de datos", "Listo", "Tabla, tablero, galería, lista, calendario"],
+      ["Fórmulas, relaciones y rollups", "Bases de datos", "Listo", "Con cálculos de columna al pie"],
+      ["Automatizaciones y plantillas de fila", "Bases de datos", "Listo", "Reglas al crear o al cambiar"],
+      ["Ventana lateral con propiedades", "Bases de datos", "Listo", "Igual que el side peek"],
+      ["Notion AI local y con Claude", "IA", "Listo", "Resumen, tareas, tono; clave propia opcional"],
+      ["Skills, MCP y rutinas", "IA", "Listo", "SKILL.md versionado y agentes"],
+      ["Comentarios y permisos", "Colaboración", "Listo", "Hilos por bloque, roles, publicación"],
+      ["Historial y auditoría", "Colaboración", "Listo", "Versiones ilimitadas y registro"],
+      ["Piel cristal líquido", "Diseño", "Listo", "Superficies translúcidas y estructuras Apple"],
+      ["Gráficas accesibles", "Diseño", "Listo", "Paleta validada para daltonismo"],
+    ]);
+    features.views = [
+      view("Por área", "board", { groupBy: featureProps[1].id }),
+      view("Todo", "table"),
+      view("Gráfica", "chart", { groupBy: featureProps[1].id }),
+    ];
+    features.activeView = features.views[0].id;
+
+    const root = store.createPage({
+      title: "Réplica de Notion",
+      icon: "🛠️",
+      cover: "linear-gradient(135deg,#2e6bff,#8a5cf6 55%,#14b8c4)",
+      parentId,
+      db: features,
+      blocks: [
+        B("columns", "", {
+          cols: [
+            {
+              width: 26,
+              blocks: [
+                B("callout", "<strong>Navegación</strong>", {
+                  emoji: "🧭", color: "blue", children: [B("divider"), B("toc")],
+                }),
+                B("callout", "<strong>Estado</strong>", {
+                  emoji: "📊", color: "green",
+                  children: [
+                    B("divider"),
+                    bul("14 funciones listas"),
+                    bul("24 tipos de bloque"),
+                    bul("6 vistas de base de datos"),
+                    bul("15 plantillas"),
+                  ],
+                }),
+              ],
+            },
+            {
+              width: 74,
+              blocks: [
+                callout(
+                  "Réplica del diseño y las funciones de Notion, hecha con HTML, CSS y JavaScript sin dependencias ni compilación. Todo lo que en Notion es de pago viene desbloqueado.",
+                  "📌", "gray"
+                ),
+                h2("Funciones"),
+                B("table-db"),
+              ],
+            },
+          ],
+        }),
+      ],
+    });
+    root.fullWidth = true;
+
+    /* Roadmap: lo que falta, con su propio tablero */
+    const roadProps = [
+      prop("Pendiente", "title"),
+      prop("Prioridad", "select", ["Alta", "Media", "Baja"]),
+      prop("Estado", "select", ["Siguiente", "Después", "En estudio"]),
+      prop("Origen", "select", ["Uso real", "Paridad con Notion"]),
+    ];
+    const roadmap = db("Pendientes", roadProps, [
+      ["Propiedades visibles por vista", "Alta", "Siguiente", "Uso real"],
+      ["Filtros con varios valores", "Alta", "Siguiente", "Uso real"],
+      ["Plantillas de fila con contenido", "Alta", "Siguiente", "Uso real"],
+      ["Sub-ítems y dependencias", "Media", "Después", "Paridad con Notion"],
+      ["Vista de línea de tiempo", "Media", "Después", "Paridad con Notion"],
+      ["Vista de formulario", "Media", "Después", "Paridad con Notion"],
+      ["Ecuaciones LaTeX", "Baja", "En estudio", "Paridad con Notion"],
+      ["Colaboración en tiempo real", "Baja", "En estudio", "Paridad con Notion"],
+    ]);
+    roadmap.views = [
+      view("Por estado", "board", { groupBy: roadProps[2].id }),
+      view("Todo", "table"),
+    ];
+    roadmap.activeView = roadmap.views[0].id;
+    store.createPage({
+      title: "Roadmap", icon: "🗺️", parentId: root.id, db: roadmap,
+      blocks: [
+        p("Lo que falta, ordenado por lo que de verdad se usa antes que por paridad."),
+        B("table-db"),
+      ],
+    });
+
+    /* Arquitectura */
+    store.createPage({
+      title: "Arquitectura", icon: "🧱", parentId: root.id,
+      blocks: [
+        h2("Cómo está repartido el código"),
+        p("Sin dependencias, sin compilación: cada archivo tiene una responsabilidad."),
+        B("table", "", {
+          headerRow: true,
+          rows: [
+            ["Archivo", "De qué se ocupa"],
+            ["store.js", "Estado y persistencia: páginas, personas, comentarios, versiones"],
+            ["blocks.js", "Editor: tipos de bloque, menú /, menciones, columnas"],
+            ["database.js", "Vistas, fórmulas, relaciones y automatizaciones"],
+            ["ai.js", "Asistente en modo local y con Claude"],
+            ["agents.js", "Skills, conexiones MCP y rutinas"],
+            ["collab.js", "Compartir, permisos y comentarios"],
+            ["history.js", "Versiones, analíticas, auditoría y exportaciones"],
+            ["assets.js", "Almacén de archivos en IndexedDB y selector de medios"],
+            ["charts.js", "Gráficas SVG con paleta validada"],
+            ["glass.css", "Piel cristal líquido y estructuras tipo Apple"],
+          ],
+        }),
+      ],
+    });
+
+    /* Decisiones */
+    store.createPage({
+      title: "Decisiones técnicas", icon: "⚖️", parentId: root.id,
+      blocks: [
+        callout("La paleta de Notion no sirve para gráficas: dos pares de colores quedan a ΔE 6.2 para protanopía. Las gráficas usan una paleta validada aparte y cada una trae su tabla equivalente.", "🎨", "purple"),
+        callout("Los archivos subidos viven en IndexedDB, no en el JSON del espacio. Guardar imágenes en base64 dentro de localStorage habría reventado la cuota con dos fotos de móvil.", "🗄️", "blue"),
+        callout("Las fórmulas se validan antes de evaluarse: sólo números, operadores y una lista corta de funciones. Cualquier otra cosa se rechaza.", "🔒", "orange"),
+        callout("La clave de API se guarda en el navegador y viaja directo a la API. En producción esa llamada debería salir de un servidor.", "⚠️", "yellow"),
+      ],
+    });
+
+    /* Cómo abrirlo */
+    store.createPage({
+      title: "Cómo abrirlo", icon: "🚀", parentId: root.id,
+      blocks: [
+        h2("Tres formas"),
+        num("Abrir el enlace publicado, sin instalar nada."),
+        num("Clonar el repositorio y abrir index.html con doble clic."),
+        num("Servirlo en local para evitar las limitaciones de file://"),
+        code("git clone -b claude/quirky-euler-ycwgru https://github.com/ZasStudio/NOTION.git\ncd NOTION\nnpx http-server -p 8080 -c-1 .", "bash"),
+        callout("El contenido se guarda en el navegador, así que cada entorno tiene su propio espacio. Desde Ajustes → Datos puedes exportar a JSON e importarlo en el otro.", "💾", "gray"),
+      ],
+    });
+
+    return root;
+  }
+
   const CATEGORIES = [
     { id: "all", name: "Todas", icon: "✨" },
     { id: "work", name: "Trabajo", icon: "💼" },
@@ -530,6 +696,7 @@ const Templates = (() => {
   function apply(store, tplId, parentId = null) {
     const tpl = byId(tplId);
     if (!tpl) return null;
+    if (tpl.custom) return tpl.custom(store, parentId);
     const spec = tpl.build();
     const page = store.createPage({
       title: spec.title, icon: spec.icon, cover: spec.cover,
@@ -665,7 +832,13 @@ const Templates = (() => {
     store.recordVersion(home.id, "Creación inicial");
     store.audit("workspace.create", "Espacio creado con contenido de ejemplo");
 
-    store.state.favorites = [home.id, tasks.id];
+    // El proyecto vive en su propio espacio de equipo
+    const projectSpace = store.createTeamspace({ name: "Proyecto", icon: "🛠️" });
+    const project = buildProject(store, null);
+    project.teamspaceId = projectSpace.id;
+    store.childrenOf(project.id).forEach((c) => (c.teamspaceId = projectSpace.id));
+
+    store.state.favorites = [home.id, tasks.id, project.id];
     store.state.openId = home.id;
     store.state.expanded[roadmap.id] = true;
     store.emit();

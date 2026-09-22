@@ -1,0 +1,403 @@
+/* ==========================================================================
+   Piel «Cristal líquido» — superficies translúcidas, filo especular y
+   estructuras tipo Apple. Se activa con <html data-skin="glass">.
+   La piel clásica (réplica fiel de Notion) sigue disponible sin este atributo.
+   ========================================================================== */
+
+:root[data-skin="glass"] {
+  /* Tipografía del sistema: SF Pro donde exista, Inter o system-ui si no */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+
+  --radius-sm: 7px;
+  --radius: 11px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);   /* curva de resorte de iOS */
+  --speed: 220ms;
+
+  --accent: #2e6bff;
+  --accent-hover: #1f57e0;
+  --glow: #8a5cf6;                           /* solo para halos, nunca texto */
+}
+
+/* ------------------------------ Claro ----------------------------------- */
+:root[data-skin="glass"],
+:root[data-skin="glass"][data-theme="light"] {
+  --canvas: #e7eaf3;
+  --bg: transparent;
+  --bg-sidebar: rgba(255, 255, 255, 0.44);
+  --bg-elevated: rgba(255, 255, 255, 0.78);
+  --bg-input: rgba(255, 255, 255, 0.72);
+  --bg-code: rgba(120, 130, 160, 0.1);
+  --bg-overlay: rgba(28, 30, 42, 0.32);
+
+  --sheet: rgba(255, 255, 255, 0.62);
+  --edge: rgba(255, 255, 255, 0.9);          /* filo especular superior */
+  --edge-soft: rgba(255, 255, 255, 0.25);
+  --hairline: rgba(60, 60, 67, 0.13);
+
+  --text: #16171c;
+  --text-secondary: #62636b;
+  --text-tertiary: #97989f;
+
+  --border: rgba(60, 60, 67, 0.12);
+  --border-strong: rgba(60, 60, 67, 0.2);
+  --divider: rgba(60, 60, 67, 0.1);
+
+  --hover: rgba(60, 60, 67, 0.055);
+  --active: rgba(60, 60, 67, 0.1);
+  --selected: rgba(46, 107, 255, 0.14);
+
+  --shadow-card: 0 1px 2px rgba(16, 18, 28, 0.06), 0 6px 18px rgba(16, 18, 28, 0.07);
+  --shadow-menu: 0 0 0 0.5px rgba(60, 60, 67, 0.12), 0 12px 32px rgba(16, 18, 28, 0.14),
+    0 2px 6px rgba(16, 18, 28, 0.08);
+  --blur: saturate(180%) blur(22px);
+}
+
+/* ------------------------------ Oscuro ---------------------------------- */
+:root[data-skin="glass"][data-theme="dark"] {
+  --canvas: #07070b;
+  --bg: transparent;
+  --bg-sidebar: rgba(22, 23, 30, 0.42);
+  --bg-elevated: rgba(38, 39, 48, 0.78);
+  --bg-input: rgba(255, 255, 255, 0.07);
+  --bg-code: rgba(255, 255, 255, 0.05);
+  --bg-overlay: rgba(4, 4, 8, 0.6);
+
+  --sheet: rgba(20, 21, 28, 0.5);
+  --edge: rgba(255, 255, 255, 0.22);
+  --edge-soft: rgba(255, 255, 255, 0.06);
+  --hairline: rgba(255, 255, 255, 0.1);
+
+  --text: rgba(255, 255, 255, 0.93);
+  --text-secondary: rgba(235, 235, 245, 0.58);
+  --text-tertiary: rgba(235, 235, 245, 0.34);
+
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.17);
+  --divider: rgba(255, 255, 255, 0.08);
+
+  --hover: rgba(255, 255, 255, 0.06);
+  --active: rgba(255, 255, 255, 0.11);
+  --selected: rgba(46, 107, 255, 0.26);
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-menu: 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 16px 40px rgba(0, 0, 0, 0.6);
+  --blur: saturate(160%) blur(24px);
+}
+
+/* ====================== Lienzo y aurora de fondo ========================= */
+:root[data-skin="glass"] body {
+  background: var(--canvas);
+  letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* La aurora es lo que el vidrio refracta: sin ella, translúcido no se lee. */
+:root[data-skin="glass"] body::before {
+  content: "";
+  position: fixed;
+  inset: -25vmax;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(42vmax 38vmax at 14% 10%, color-mix(in oklab, var(--accent) 62%, transparent), transparent 66%),
+    radial-gradient(38vmax 34vmax at 86% 6%, color-mix(in oklab, var(--glow) 55%, transparent), transparent 64%),
+    radial-gradient(44vmax 40vmax at 74% 92%, color-mix(in oklab, #14b8c4 44%, transparent), transparent 66%),
+    radial-gradient(30vmax 28vmax at 40% 60%, color-mix(in oklab, #ff8a4c 26%, transparent), transparent 62%);
+  filter: blur(12px);
+  opacity: 0.9;
+  animation: drift 42s var(--ease) infinite alternate;
+}
+:root[data-skin="glass"][data-theme="dark"] body::before { opacity: 0.55; }
+
+@keyframes drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(2.5%, -2%, 0) scale(1.08); }
+  100% { transform: translate3d(-2%, 2.5%, 0) scale(1.03); }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-skin="glass"] body::before { animation: none; }
+}
+
+:root[data-skin="glass"] #app { position: relative; z-index: 1; }
+
+/* ===================== Material de vidrio reutilizable =================== */
+/* El filo especular: un borde que se enciende arriba a la izquierda y se
+   apaga en diagonal. Es la firma de toda la piel. */
+:root[data-skin="glass"] #sidebar,
+:root[data-skin="glass"] #topbar,
+:root[data-skin="glass"] #peek,
+:root[data-skin="glass"] #comments,
+:root[data-skin="glass"] .menu,
+:root[data-skin="glass"] .modal,
+:root[data-skin="glass"] .ai-panel,
+:root[data-skin="glass"] .media-picker,
+:root[data-skin="glass"] .format-bar,
+:root[data-skin="glass"] .toast,
+:root[data-skin="glass"] .page {
+  position: relative;
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+}
+
+:root[data-skin="glass"] .menu::after,
+:root[data-skin="glass"] .modal::after,
+:root[data-skin="glass"] .ai-panel::after,
+:root[data-skin="glass"] .media-picker::after,
+:root[data-skin="glass"] .format-bar::after,
+:root[data-skin="glass"] .toast::after,
+:root[data-skin="glass"] .page::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(145deg, var(--edge), var(--edge-soft) 38%, transparent 62%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ------------------------------- Sidebar -------------------------------- */
+:root[data-skin="glass"] #sidebar {
+  background: var(--bg-sidebar);
+  border-right: 0.5px solid var(--hairline);
+}
+:root[data-skin="glass"] .sb-item,
+:root[data-skin="glass"] .tree-row {
+  border-radius: 9px;
+  transition: background var(--speed) var(--ease), transform var(--speed) var(--ease);
+}
+:root[data-skin="glass"] .sb-item:active,
+:root[data-skin="glass"] .tree-row:active { transform: scale(0.985); }
+:root[data-skin="glass"] .tree-row.is-active {
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+}
+:root[data-skin="glass"] .ws-avatar {
+  background: linear-gradient(145deg, var(--accent), var(--glow));
+  box-shadow: 0 2px 8px color-mix(in oklab, var(--accent) 45%, transparent);
+}
+:root[data-skin="glass"] .sb-foot { border-top: 0.5px solid var(--hairline); }
+
+/* ------------------------------- Topbar --------------------------------- */
+:root[data-skin="glass"] #topbar {
+  background: transparent;
+  border-bottom: 0;
+}
+
+/* --------------------------- Hoja del documento -------------------------- */
+/* La página flota como una lámina sobre la aurora, al estilo de una ventana
+   de documento de macOS. */
+:root[data-skin="glass"] #content { padding: 14px 18px 0; }
+:root[data-skin="glass"] .page {
+  background: var(--sheet);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  min-height: calc(100% - 14px);
+}
+:root[data-skin="glass"] .page-cover { border-radius: var(--radius-xl) var(--radius-xl) 0 0; }
+:root[data-skin="glass"] .page-title {
+  letter-spacing: -0.028em;
+  font-weight: 700;
+}
+:root[data-skin="glass"] .block-heading1 .block-content,
+:root[data-skin="glass"] .block-heading2 .block-content,
+:root[data-skin="glass"] .peek-title,
+:root[data-skin="glass"] .tpl-head h2 { letter-spacing: -0.02em; }
+
+/* --------------------------- Botones y controles ------------------------- */
+:root[data-skin="glass"] .btn {
+  border-radius: 9px;
+  transition: background var(--speed) var(--ease), transform 120ms var(--ease),
+    box-shadow var(--speed) var(--ease);
+}
+:root[data-skin="glass"] .btn:active { transform: scale(0.96); }
+:root[data-skin="glass"] .btn-primary {
+  background: linear-gradient(180deg,
+    color-mix(in oklab, var(--accent) 88%, white), var(--accent));
+  box-shadow: 0 1px 1px rgba(255, 255, 255, 0.35) inset,
+    0 2px 10px color-mix(in oklab, var(--accent) 40%, transparent);
+}
+:root[data-skin="glass"] .btn-primary:hover {
+  background: linear-gradient(180deg, var(--accent), var(--accent-hover));
+}
+:root[data-skin="glass"] .btn-bordered {
+  border: 0.5px solid var(--border-strong);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-card);
+}
+:root[data-skin="glass"] .icon-btn { border-radius: 9px; }
+
+:root[data-skin="glass"] :is(button, a, input, [contenteditable]):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3.5px color-mix(in oklab, var(--accent) 28%, transparent);
+  border-radius: 8px;
+}
+
+:root[data-skin="glass"] .switch {
+  width: 42px; height: 25px; border-radius: 13px;
+  background: color-mix(in oklab, var(--text-tertiary) 45%, transparent);
+  transition: background var(--speed) var(--ease);
+}
+:root[data-skin="glass"] .switch::after {
+  width: 21px; height: 21px; top: 2px; left: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  transition: transform var(--speed) var(--ease);
+}
+:root[data-skin="glass"] .switch.is-on { background: #30d158; }
+:root[data-skin="glass"] .switch.is-on::after { transform: translateX(17px); }
+
+/* ------------------- Control segmentado (vistas de base) ----------------- */
+:root[data-skin="glass"] .db-header { border-bottom: 0; gap: 10px; }
+:root[data-skin="glass"] .db-views {
+  background: color-mix(in oklab, var(--text-tertiary) 16%, transparent);
+  border-radius: 10px;
+  padding: 2px;
+  gap: 2px;
+  flex: 0 1 auto;
+}
+:root[data-skin="glass"] .db-view-tab {
+  border-radius: 8px;
+  height: 28px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background var(--speed) var(--ease), color var(--speed) var(--ease);
+}
+:root[data-skin="glass"] .db-view-tab:hover { background: var(--hover); }
+:root[data-skin="glass"] .db-view-tab.is-active {
+  background: var(--bg-elevated);
+  box-shadow: 0 1px 3px rgba(16, 18, 28, 0.14), 0 0 0 0.5px var(--hairline);
+  color: var(--text);
+  border-radius: 8px;
+}
+
+/* ---------------------- Listas agrupadas (propiedades) ------------------- */
+:root[data-skin="glass"] .prop-panel,
+:root[data-skin="glass"] .ai-settings {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 0 0.5px var(--hairline);
+  padding: 4px 6px;
+  gap: 0;
+  overflow: hidden;
+}
+:root[data-skin="glass"] .prop-row {
+  padding: 2px 4px;
+  border-bottom: 0.5px solid var(--hairline);
+}
+:root[data-skin="glass"] .prop-row:last-of-type { border-bottom: 0; }
+:root[data-skin="glass"] .prop-add { margin: 4px; }
+
+/* ------------------------------- Tarjetas -------------------------------- */
+:root[data-skin="glass"] .board-card,
+:root[data-skin="glass"] .gallery-card,
+:root[data-skin="glass"] .feature-card,
+:root[data-skin="glass"] .cx-card,
+:root[data-skin="glass"] .stat-tile,
+:root[data-skin="glass"] .tpl-card,
+:root[data-skin="glass"] .auto-rule,
+:root[data-skin="glass"] .cm-thread {
+  background: var(--bg-elevated);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: transform var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
+}
+:root[data-skin="glass"] .board-card:hover,
+:root[data-skin="glass"] .gallery-card:hover,
+:root[data-skin="glass"] .tpl-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(16, 18, 28, 0.08), 0 14px 34px rgba(16, 18, 28, 0.12);
+}
+:root[data-skin="glass"] .callout-box {
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 0 0.5px var(--hairline);
+}
+
+/* ------------------------- Menús, hojas y paneles ------------------------ */
+:root[data-skin="glass"] .menu,
+:root[data-skin="glass"] .ai-panel,
+:root[data-skin="glass"] .media-picker,
+:root[data-skin="glass"] .format-bar {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+}
+:root[data-skin="glass"] .menu-item { border-radius: 8px; margin: 0 6px; padding: 7px 8px; }
+:root[data-skin="glass"] .modal {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-xl);
+}
+/* Asa de la hoja, como en una sheet de iOS */
+:root[data-skin="glass"] .modal::before {
+  content: "";
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  width: 38px; height: 4px; border-radius: 2px;
+  background: color-mix(in oklab, var(--text-tertiary) 55%, transparent);
+  z-index: 3;
+}
+:root[data-skin="glass"] .modal .tpl-head { padding-top: 22px; }
+:root[data-skin="glass"] .overlay { backdrop-filter: blur(3px); }
+
+:root[data-skin="glass"] #peek {
+  background: var(--sheet);
+  border-left: 0.5px solid var(--hairline);
+}
+:root[data-skin="glass"] #comments {
+  background: color-mix(in oklab, var(--canvas) 62%, transparent);
+  border-left: 0.5px solid var(--hairline);
+}
+
+/* --------------------------------- Tablas -------------------------------- */
+:root[data-skin="glass"] .db-table th,
+:root[data-skin="glass"] .db-table td,
+:root[data-skin="glass"] .simple-table td,
+:root[data-skin="glass"] .simple-table th { border-color: var(--hairline); }
+:root[data-skin="glass"] .db-cell:hover { background: var(--hover); border-radius: 7px; }
+:root[data-skin="glass"] .tag { border-radius: 7px; font-weight: 500; }
+:root[data-skin="glass"] .plan-chip {
+  background: linear-gradient(135deg, var(--accent), var(--glow));
+}
+
+/* --------------------------- Aparición de capas -------------------------- */
+:root[data-skin="glass"] .menu { animation: glass-pop 200ms var(--ease); }
+:root[data-skin="glass"] .modal { animation: glass-rise 260ms var(--ease); }
+@keyframes glass-pop {
+  from { opacity: 0; transform: translateY(-6px) scale(0.985); }
+}
+@keyframes glass-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.975); }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-skin="glass"] .menu,
+  :root[data-skin="glass"] .modal { animation: none; }
+}
+
+/* Sin soporte de backdrop-filter, las superficies se vuelven sólidas */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-skin="glass"] {
+    --bg-sidebar: #f7f8fb;
+    --bg-elevated: #ffffff;
+    --sheet: #ffffff;
+  }
+  :root[data-skin="glass"][data-theme="dark"] {
+    --bg-sidebar: #17181d;
+    --bg-elevated: #22232b;
+    --sheet: #17181d;
+  }
+}
+
+/* El control segmentado se adapta cuando hay muchas vistas */
+:root[data-skin="glass"] .db-header { flex-wrap: wrap; row-gap: 8px; }
+:root[data-skin="glass"] .db-views {
+  max-width: 100%; overflow-x: auto; scrollbar-width: none;
+}
+:root[data-skin="glass"] .db-views::-webkit-scrollbar { display: none; }
+:root[data-skin="glass"] .db-view-tab { flex: none; }
+:root[data-skin="glass"] .db-tools { margin-left: auto; }

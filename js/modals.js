@@ -236,6 +236,20 @@ const Modals = (() => {
         })
       ),
       row(
+        "Apariencia",
+        U.el(
+          "div", { style: { display: "flex", gap: "6px" } },
+          U.el("button", {
+            class: "btn btn-bordered", text: "Cristal líquido",
+            onclick: () => { App.setSkin("glass"); U.toast("Apariencia: cristal líquido"); },
+          }),
+          U.el("button", {
+            class: "btn btn-bordered", text: "Clásico",
+            onclick: () => { App.setSkin("classic"); U.toast("Apariencia: clásico"); },
+          })
+        )
+      ),
+      row(
         "Tema",
         U.el(
           "div", { style: { display: "flex", gap: "6px" } },

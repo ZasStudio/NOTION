@@ -950,7 +950,16 @@ const Editor = (() => {
         break;
 
       case "toc": {
-        const heads = page.blocks.filter((b) => b.type.startsWith("heading"));
+        // Los encabezados pueden vivir dentro de columnas o destacados
+        const collectHeadings = (list, out = []) => {
+          list.forEach((b) => {
+            if (b.type.startsWith("heading")) out.push(b);
+            if (b.type === "columns") (b.cols || []).forEach((c) => collectHeadings(c.blocks || [], out));
+            if (b.children && b.children.length) collectHeadings(b.children, out);
+          });
+          return out;
+        };
+        const heads = collectHeadings(page.blocks);
         wrap.append(
           U.el(
             "div", { class: "toc-block" },
@@ -960,8 +969,10 @@ const Editor = (() => {
                     class: "toc-link toc-" + h.type,
                     text: U.stripHtml(h.text) || "Sin título",
                     onclick: () => {
-                      const node = root.querySelector(`[data-id="${h.id}"]`);
+                      const node = document.querySelector(`.blocks [data-id="${h.id}"]`);
                       node?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      node?.classList.add("is-flash");
+                      setTimeout(() => node?.classList.remove("is-flash"), 1200);
                     },
                   })))
               : U.el("div", { class: "db-hint", text: "Añade encabezados para construir el índice" })
