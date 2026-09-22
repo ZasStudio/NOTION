@@ -195,7 +195,9 @@ const Sidebar = (() => {
       U.el("button", {
         class: "sb-item", html: ICONS.home + "<span>Inicio</span>",
         onclick: () => {
-          const home = Object.values(st.pages).find((p) => !p.deleted && p.title === "Inicio");
+          // En un espacio nuevo no hay página «Inicio»: se abre la primera
+          const home = Object.values(st.pages).find((p) => !p.deleted && p.title === "Inicio")
+            || Store.rootPagesOf(null)[0] || Store.childrenOf(null)[0];
           if (home) Store.open(home.id);
         },
       }),

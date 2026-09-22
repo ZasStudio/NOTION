@@ -32,6 +32,15 @@ Dos pieles, conmutables en *Ajustes → Apariencia*:
   hay `backdrop-filter`.
 - **Clásico**: la réplica fiel del diseño plano de Notion.
 
+## Un espacio nuevo, como en Notion
+
+Al abrirlo por primera vez el espacio nace **vacío**: pregunta el nombre y crea
+«Comenzar aquí» más una nota en blanco, nada más. Desde ese mismo paso, o luego
+en *Ajustes → Espacio*, se puede **cargar el contenido de ejemplo** (espacios de
+equipo, bases de datos con automatizaciones, gráficas y el proyecto de muestra)
+o **volver a empezar de cero**. Las plantillas están siempre disponibles en la
+barra lateral.
+
 ## Iconos
 
 El selector de iconos replica el de Notion: pestañas **Emoji · Íconos · Subir**,
@@ -41,6 +50,14 @@ iconos de línea** en seis familias que se pueden teñir con los diez colores de
 Notion (se guardan como `ico:nombre:color` y se pintan en la página, el árbol
 lateral, la ventana lateral y las bases de datos). *Subir* abre el selector de
 medios de siempre.
+
+## Vídeo
+
+El bloque **Vídeo** (`/video`) sube un archivo al almacén del navegador y lo
+reproduce con los controles nativos, sin conexión y sin salir de la página;
+también acepta enlaces directos y de YouTube o Vimeo, que se abren en su propio
+reproductor. Se puede arrastrar el archivo al bloque, ajustar el ancho con las
+asas, alinearlo, descargarlo y ponerle pie de foto.
 
 ## Guía en tiempo real
 

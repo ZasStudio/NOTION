@@ -710,6 +710,38 @@ const Templates = (() => {
   }
 
   /* ----------------------- Contenido inicial del espacio ------------------- */
+  /* ------------------------ Espacio nuevo (de cero) -----------------------
+     Como al crear una cuenta en Notion: una página para empezar, una nota en
+     blanco y nada más. Las plantillas y el contenido de ejemplo siguen ahí,
+     pero se insertan cuando hagan falta. */
+  function seedFresh(store) {
+    const start = store.createPage({
+      title: "Comenzar aquí",
+      icon: "👋",
+      blocks: [
+        p("Esta es tu primera página. Escribe debajo como en cualquier documento."),
+        p("Pulsa <code>/</code> para insertar un encabezado, una tarea, una tabla, una imagen o una base de datos."),
+        h2("Prueba rápida"),
+        todo("Escribe <code>/</code> y elige un bloque"),
+        todo("Arrastra este bloque por su manija ⠿"),
+        todo("Crea una página nueva desde la barra lateral"),
+        p(""),
+      ],
+    });
+
+    const notes = store.createPage({
+      title: "Notas rápidas",
+      icon: "📝",
+      blocks: [p("")],
+    });
+
+    store.state.favorites = [start.id];
+    store.state.openId = start.id;
+    store.state.isNew = true;
+    store.emit();
+    return { start, notes };
+  }
+
   function seedWorkspace(store) {
     const home = store.createPage({
       title: "Inicio",
@@ -844,5 +876,5 @@ const Templates = (() => {
     store.emit();
   }
 
-  return { list, CATEGORIES, byId, apply, seedWorkspace, B, db, prop, view };
+  return { list, CATEGORIES, byId, apply, seedWorkspace, seedFresh, B, db, prop, view };
 })();

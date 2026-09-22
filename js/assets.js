@@ -201,7 +201,20 @@ const Assets = (() => {
    */
   function pick(opts = {}) {
     const tabs = opts.tabs || ["upload", "link", "recent"];
-    const accept = opts.accept || "image/*";
+    // «kind» decide qué se acepta y cómo se redactan los textos: imagen o vídeo
+    const kind = opts.kind === "video" ? "video" : "image";
+    const accept = opts.accept || (kind === "video" ? "video/*" : "image/*");
+    const T = kind === "video"
+      ? { drop: "Arrastra un vídeo o haz clic para elegirlo",
+          hint: "MP4, WebM o MOV. Se guarda en este navegador y se reproduce sin conexión.",
+          link: "Pega el enlace del vídeo…", insert: "Insertar vídeo",
+          linkHint: "Funciona con archivos .mp4/.webm y con enlaces de YouTube o Vimeo.",
+          wrong: "Ese archivo no es un vídeo.", empty: "Todavía no has subido ningún vídeo." }
+      : { drop: "Arrastra una imagen o haz clic para elegirla",
+          hint: "También puedes pegarla con ⌘/Ctrl + V. Se guarda en este navegador.",
+          link: "Pega el enlace de la imagen…", insert: "Insertar imagen",
+          linkHint: "Funciona con cualquier URL pública que termine en .jpg, .png, .webp o .gif.",
+          wrong: "Ese archivo no es una imagen.", empty: "Todavía no has subido ninguna imagen." };
     let active = tabs[0];
 
     const panel = U.el("div", { class: "media-picker" });
@@ -232,9 +245,9 @@ const Assets = (() => {
             if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
           },
         },
-        U.el("span", { class: "media-drop-icon", html: ICONS.image }),
-        U.el("strong", { text: "Arrastra una imagen o haz clic para elegirla" }),
-        U.el("span", { class: "media-hint", text: "También puedes pegarla con ⌘/Ctrl + V. Se guarda en este navegador." })
+        U.el("span", { class: "media-drop-icon", html: kind === "video" ? ICONS.video : ICONS.image }),
+        U.el("strong", { text: T.drop }),
+        U.el("span", { class: "media-hint", text: T.hint })
       );
 
       const status = U.el("div", { class: "media-status" });
@@ -242,8 +255,9 @@ const Assets = (() => {
       async function handleFiles(files) {
         const file = files[0];
         if (!file) return;
-        if (!/^image\//.test(file.type) && accept.startsWith("image")) {
-          status.textContent = "Ese archivo no es una imagen.";
+        const family = kind === "video" ? /^video\//: /^image\//;
+        if (!family.test(file.type)) {
+          status.textContent = T.wrong;
           return;
         }
         status.textContent = "Guardando…";
@@ -256,7 +270,7 @@ const Assets = (() => {
       }
 
       panel.addEventListener("paste", (e) => {
-        const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith("image/"));
+        const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith(kind + "/"));
         if (item) handleFiles([item.getAsFile()]);
       });
 
@@ -266,33 +280,40 @@ const Assets = (() => {
     /* --- Enlace --- */
     const linkPane = () => {
       const input = U.el("input", {
-        class: "media-input", placeholder: "Pega el enlace de la imagen…",
+        class: "media-input", placeholder: T.link,
         onkeydown: (e) => { if (e.key === "Enter" && e.target.value.trim()) choose(e.target.value.trim()); },
       });
       return U.el(
         "div", { class: "media-link" },
         input,
         U.el("button", {
-          class: "btn btn-primary", text: "Insertar imagen",
+          class: "btn btn-primary", text: T.insert,
           onclick: () => input.value.trim() && choose(input.value.trim()),
         }),
-        U.el("div", { class: "media-hint", text: "Funciona con cualquier URL pública que termine en .jpg, .png, .webp o .gif." })
+        U.el("div", { class: "media-hint", text: T.linkHint })
       );
     };
 
     /* --- Subidas anteriores --- */
     const recentPane = () => {
-      const list = Store.state.assets || [];
+      const list = (Store.state.assets || []).filter((a) =>
+        kind === "video" ? /^video\//.test(a.type || "") : !/^video\//.test(a.type || ""));
       if (!list.length)
-        return U.el("div", { class: "media-empty", text: "Todavía no has subido ninguna imagen." });
+        return U.el("div", { class: "media-empty", text: T.empty });
 
       const grid = U.el("div", { class: "media-grid" });
       list.slice(0, 40).forEach((a) => {
+        const isVideo = /^video\//.test(a.type || "");
         const thumb = U.el("div", {
-          class: "media-thumb", title: `${a.name} · ${fmtSize(a.size)}`,
+          class: "media-thumb" + (isVideo ? " is-video" : ""), title: `${a.name} · ${fmtSize(a.size)}`,
           onclick: () => choose("asset:" + a.id),
         });
-        attach(thumb, "asset:" + a.id, "background");
+        if (isVideo) {
+          // La miniatura es el propio vídeo parado en su primer fotograma
+          const v = U.el("video", { muted: true, playsinline: true, preload: "metadata" });
+          attach(v, "asset:" + a.id);
+          thumb.append(v);
+        } else attach(thumb, "asset:" + a.id, "background");
         thumb.append(
           U.el("button", {
             class: "media-del", html: ICONS.trash, title: "Eliminar del almacén",

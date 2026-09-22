@@ -661,9 +661,15 @@ const App = (() => {
 
     Agents.startScheduler();
 
-    if (!Store.state.seenAnnouncement) setTimeout(Modals.cooking, 600);
-    // La guía se abre sola la primera vez, cuando no hay nada más encima
-    Tour.maybeAutoStart(Store.state.seenAnnouncement ? 800 : 1200);
+    if (Store.state.isNew) {
+      // Espacio recién creado: se pregunta el nombre y con qué empezar
+      Store.state.seenAnnouncement = true;
+      setTimeout(Modals.onboarding, 350);
+    } else {
+      if (!Store.state.seenAnnouncement) setTimeout(Modals.cooking, 600);
+      // La guía se abre sola la primera vez, cuando no hay nada más encima
+      Tour.maybeAutoStart(Store.state.seenAnnouncement ? 800 : 1200);
+    }
   }
 
   return {

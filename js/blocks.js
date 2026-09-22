@@ -17,6 +17,7 @@ const Editor = (() => {
     { type: "divider", name: "Divisor", icon: ICONS.divider, desc: "Separa visualmente bloques.", group: "Básicos", md: "---" },
     { type: "code", name: "Código", icon: ICONS.code, desc: "Fragmento de código.", group: "Medios", md: "```" },
     { type: "image", name: "Imagen", icon: ICONS.image, desc: "Sube o enlaza una imagen.", group: "Medios" },
+    { type: "video", name: "Vídeo", icon: ICONS.video, desc: "Sube un vídeo o pega un enlace y se reproduce aquí.", group: "Medios" },
     { type: "bookmark", name: "Marcador web", icon: ICONS.bookmark, desc: "Guarda un enlace con vista previa.", group: "Medios" },
     { type: "html", name: "Bloque HTML", icon: ICONS.html, desc: "Visuales interactivos en un iframe aislado.", group: "Medios" },
     { type: "table-db", name: "Base de datos", icon: ICONS.table, desc: "Tabla, tablero, calendario, gráfica y más.", group: "Bases de datos" },
@@ -55,7 +56,7 @@ const Editor = (() => {
   };
 
   const NON_TEXT = ["divider", "image", "html", "table-db", "subpage", "bookmark",
-    "toc", "breadcrumb", "button", "file", "embed", "synced", "ai",
+    "toc", "breadcrumb", "button", "file", "embed", "synced", "ai", "video",
     "columns", "table", "linked-db"];
 
   let page = null;
@@ -854,6 +855,124 @@ const Editor = (() => {
         break;
       }
 
+      case "video": {
+        if (block.src) {
+          const frame = U.el("div", {
+            class: "video-frame align-" + (block.align || "left"),
+            style: block.width ? { width: block.width + "%" } : {},
+          });
+
+          let media;
+          const stream = videoEmbedUrl(block.src);
+          if (stream) {
+            // YouTube o Vimeo: se reproduce dentro de su propio reproductor
+            media = U.el("iframe", {
+              src: stream, loading: "lazy", allowfullscreen: true,
+              allow: "accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture; fullscreen",
+              referrerpolicy: "no-referrer",
+            });
+          } else {
+            // Archivo subido o enlace directo: reproductor nativo del navegador
+            media = U.el("video", {
+              controls: true, playsinline: true, preload: "metadata",
+              poster: block.poster || null,
+              onloadedmetadata: (e) => {
+                if (!block.ratio) {
+                  block.ratio = e.target.videoHeight / e.target.videoWidth;
+                  frame.style.setProperty("--ratio", block.ratio);
+                }
+              },
+            });
+            Assets.attach(media, block.src);
+            media.addEventListener("error", () =>
+              frame.append(U.el("div", { class: "image-broken", text: "No se pudo cargar el vídeo." })));
+          }
+          if (block.ratio) frame.style.setProperty("--ratio", block.ratio);
+
+          // Asas para ajustar el ancho, igual que en las imágenes
+          ["left", "right"].forEach((side) => {
+            const handle = U.el("div", { class: "image-handle handle-" + side });
+            handle.addEventListener("mousedown", (e) => {
+              e.preventDefault();
+              const startX = e.clientX;
+              const startW = frame.offsetWidth;
+              const containerW = frame.parentElement.offsetWidth;
+              const onMove = (ev) => {
+                const delta = (ev.clientX - startX) * (side === "right" ? 1 : -1);
+                const pct = U.clamp(((startW + delta * 2) / containerW) * 100, 25, 100);
+                frame.style.width = pct + "%";
+                block.width = Math.round(pct);
+              };
+              const onUp = () => {
+                document.removeEventListener("mousemove", onMove);
+                document.removeEventListener("mouseup", onUp);
+                touch();
+              };
+              document.addEventListener("mousemove", onMove);
+              document.addEventListener("mouseup", onUp);
+            });
+            handle.addEventListener("dblclick", () => { block.width = 100; touch(); render(); });
+            frame.append(handle);
+          });
+
+          const tools = U.el(
+            "div", { class: "image-tools" },
+            U.el("button", { class: "btn", text: "Reemplazar", onclick: (e) => openVideoPicker(block, e.currentTarget) }),
+            U.el("button", {
+              class: "btn", html: ICONS.palette, title: "Alineación",
+              onclick: (e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                Menus.open({
+                  x: r.left - 60, y: r.bottom + 4, width: 180,
+                  items: [
+                    { label: "Izquierda", active: (block.align || "left") === "left",
+                      onClick: () => { block.align = "left"; touch(); render(); } },
+                    { label: "Centrado", active: block.align === "center",
+                      onClick: () => { block.align = "center"; touch(); render(); } },
+                    { label: "Derecha", active: block.align === "right",
+                      onClick: () => { block.align = "right"; touch(); render(); } },
+                    { type: "separator" },
+                    { label: "Ancho completo", onClick: () => { block.width = 100; touch(); render(); } },
+                  ],
+                });
+              },
+            }),
+            !stream ? U.el("button", {
+              class: "btn", html: ICONS.import, title: "Descargar",
+              onclick: async () => {
+                const href = await Assets.url(block.src);
+                if (!href) return U.toast("No se encontró el vídeo");
+                U.el("a", { href, download: Assets.meta(Assets.idOf(block.src))?.name || "video" }).click();
+              },
+            }) : null
+          );
+
+          frame.append(media, tools);
+          wrap.append(U.el("div", { class: "image-wrap video-wrap" }, frame, makeContent("image-caption")));
+        } else {
+          const empty = U.el("div", {
+            class: "image-empty",
+            html: ICONS.video + "<span>Añade un vídeo</span>",
+            onclick: (e) => openVideoPicker(block, e.currentTarget),
+            ondragover: (e) => { e.preventDefault(); empty.classList.add("is-over"); },
+            ondragleave: () => empty.classList.remove("is-over"),
+            ondrop: async (e) => {
+              e.preventDefault();
+              empty.classList.remove("is-over");
+              const file = e.dataTransfer.files[0];
+              if (!file) return;
+              if (!/^video\//.test(file.type)) return U.toast("Ese archivo no es un vídeo");
+              const saved = await Assets.save(file);
+              block.src = saved.ref;
+              touch();
+              render();
+            },
+          });
+          wrap.append(empty);
+        }
+        break;
+      }
+
       case "bookmark": {
         if (!block.url) {
           wrap.append(
@@ -1384,6 +1503,36 @@ const Editor = (() => {
         render();
       },
     });
+  }
+
+  function openVideoPicker(block, anchor) {
+    Assets.pick({
+      anchor, kind: "video", tabs: ["upload", "link", "recent"],
+      onRemove: block.src ? () => { block.src = ""; delete block.ratio; touch(); render(); } : null,
+      onPick: (value) => {
+        block.src = value;
+        delete block.ratio;
+        touch();
+        render();
+      },
+    });
+  }
+
+  /** YouTube o Vimeo → URL de su reproductor; null si es un archivo o enlace directo. */
+  function videoEmbedUrl(src) {
+    if (typeof src !== "string" || src.startsWith("asset:")) return null;
+    try {
+      const u = new URL(src);
+      const host = u.hostname.replace("www.", "");
+      if (host.endsWith("youtube.com") && u.searchParams.get("v"))
+        return "https://www.youtube.com/embed/" + u.searchParams.get("v");
+      if (host === "youtu.be") return "https://www.youtube.com/embed" + u.pathname;
+      if (host.endsWith("vimeo.com") && /^\/\d+/.test(u.pathname))
+        return "https://player.vimeo.com/video" + u.pathname;
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   /** Convierte enlaces conocidos en su URL insertable. */

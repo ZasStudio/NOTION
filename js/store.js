@@ -3,6 +3,7 @@
    ========================================================================== */
 const Store = (() => {
   const KEY = "zas-notion-v1";
+  const SEED_KEY = "zas-notion-seed";
   const listeners = new Set();
   const undoStack = [];
   const redoStack = [];
@@ -24,6 +25,7 @@ const Store = (() => {
     expanded: {},
     seenAnnouncement: false,
     seenTour: false,
+    isNew: false,
     recent: [],
 
     /* --- Funciones avanzadas: todas activas, sin planes ni cobros --- */
@@ -129,7 +131,11 @@ const Store = (() => {
     }
     if (!state || !state.pages) {
       state = emptyState();
-      Templates.seedWorkspace(api);
+      // Un espacio nuevo nace vacío, como en Notion; el contenido de ejemplo
+      // se carga a petición (primer arranque o Ajustes → Espacio).
+      if (localStorage.getItem(SEED_KEY) === "sample") Templates.seedWorkspace(api);
+      else Templates.seedFresh(api);
+      localStorage.removeItem(SEED_KEY);
     } else {
       state = migrate(state);
     }
@@ -608,7 +614,12 @@ const Store = (() => {
     audit, trackView, statsOf,
     skill, enabledSkills, saveSkill, deleteSkill,
     connection, toggleConnection, agent, saveRoutine, deleteRoutine,
-    reset() { localStorage.removeItem(KEY); location.reload(); },
+    /** Vuelve a empezar: «fresh» deja el espacio en blanco, «sample» carga el ejemplo. */
+    reset(seed = "fresh") {
+      localStorage.removeItem(KEY);
+      localStorage.setItem(SEED_KEY, seed === "sample" ? "sample" : "fresh");
+      location.reload();
+    },
     exportJSON: () => JSON.stringify(state, null, 2),
     importJSON(json) {
       const next = JSON.parse(json);

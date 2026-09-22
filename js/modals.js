@@ -277,6 +277,20 @@ const Modals = (() => {
         )
       ),
       row(
+        "Espacio",
+        U.el(
+          "div", { style: { display: "flex", gap: "6px" } },
+          U.el("button", {
+            class: "btn btn-bordered", text: "Empezar de cero",
+            onclick: () => confirm("¿Vaciar el espacio y empezar como un Notion nuevo?") && Store.reset("fresh"),
+          }),
+          U.el("button", {
+            class: "btn btn-bordered", text: "Cargar ejemplo",
+            onclick: () => confirm("¿Reemplazar el espacio por el contenido de ejemplo?") && Store.reset("sample"),
+          })
+        )
+      ),
+      row(
         "Datos",
         U.el(
           "div", { style: { display: "flex", gap: "6px" } },
@@ -316,13 +330,54 @@ const Modals = (() => {
             },
           }),
           U.el("button", {
-            class: "btn btn-bordered", text: "Reiniciar", style: { color: "var(--c-red)" },
-            onclick: () => confirm("¿Borrar todo y volver al contenido de ejemplo?") && Store.reset(),
+            class: "btn btn-bordered", text: "Borrar todo", style: { color: "var(--c-red)" },
+            onclick: () => confirm("¿Borrar todo el espacio? No se puede deshacer.") && Store.reset("fresh"),
           })
         )
       )
     );
     const modal = overlay(card);
+    return modal;
+  }
+
+  /* --------------------- Primer arranque: espacio nuevo -------------------- */
+  function onboarding() {
+    const input = U.el("input", {
+      class: "ob-input", type: "text", value: Store.state.workspace || "Mi espacio",
+      placeholder: "Nombre del espacio", spellcheck: "false",
+    });
+
+    const finish = (sample) => {
+      const name = input.value.trim();
+      if (name) Store.state.workspace = name;
+      Store.state.isNew = false;
+      Store.save();
+      modal.close();
+      if (sample) { Store.reset("sample"); return; }
+      Store.emit();
+      Tour.start();
+    };
+
+    const card = U.el(
+      "div", { class: "modal ob-modal" },
+      U.el("div", { class: "ob-mark", text: (Store.state.workspace || "M").trim()[0].toUpperCase() }),
+      U.el("h2", { text: "Crea tu espacio" }),
+      U.el("p", { class: "ob-sub", text: "Ponle nombre. Después podrás cambiarlo en Ajustes." }),
+      input,
+      U.el("div", { class: "ob-choices" },
+        U.el("button", { class: "ob-choice is-main",
+          onclick: () => finish(false) },
+          U.el("div", { class: "ob-choice-title", text: "Empezar en blanco" }),
+          U.el("div", { class: "ob-choice-sub", text: "Una página para empezar y nada más, como un Notion recién creado." })),
+        U.el("button", { class: "ob-choice",
+          onclick: () => finish(true) },
+          U.el("div", { class: "ob-choice-title", text: "Con contenido de ejemplo" }),
+          U.el("div", { class: "ob-choice-sub", text: "Espacios de equipo, bases de datos, automatizaciones y el proyecto de muestra." }))),
+      U.el("div", { class: "ob-foot", text: "Las plantillas están siempre disponibles desde la barra lateral." })
+    );
+    const modal = overlay(card, { onClose: () => { Store.state.isNew = false; Store.save(); } });
+    setTimeout(() => { input.focus(); input.select(); }, 80);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") finish(false); });
     return modal;
   }
 
@@ -476,5 +531,5 @@ const Modals = (() => {
     return modal;
   }
 
-  return { search, templates, trash, settings, cooking, overlay, htmlBlockDemo };
+  return { search, templates, trash, settings, cooking, onboarding, overlay, htmlBlockDemo };
 })();
