@@ -21,6 +21,24 @@ No necesita instalación: todo el estado vive en `localStorage` del navegador.
 > gráficas, analíticas, auditoría y exportación completa— vienen activas. No hay
 > planes, paywall ni pasarela de pago en ninguna parte.
 
+## Apariencia
+
+Dos pieles, conmutables en *Ajustes → Apariencia*:
+
+- **Cristal líquido** (por defecto): superficies translúcidas con desenfoque y
+  filo especular sobre una aurora de fondo, control segmentado para las vistas,
+  listas agrupadas con separadores hairline, hojas con asa y tipografía del
+  sistema. Respeta `prefers-reduced-motion` y cae a superficies sólidas donde no
+  hay `backdrop-filter`.
+- **Clásico**: la réplica fiel del diseño plano de Notion.
+
+## El proyecto dentro de la réplica
+
+El espacio de equipo **Proyecto** contiene la página «Réplica de Notion» con la
+base de datos de funciones (por área, tabla y gráfica) y sus subpáginas:
+Roadmap, Arquitectura, Decisiones técnicas y Cómo abrirlo. Está también en la
+galería de plantillas.
+
 ## Qué replica
 
 ### Editor de bloques
@@ -154,7 +172,7 @@ trimestrales y Seguimiento de bugs.
 ```
 index.html
 css/  tokens.css  base.css  layout.css  editor.css  database.css
-      overlays.css  pro.css
+      overlays.css  pro.css  glass.css
 js/   utils.js  icons.js  templates.js  store.js  assets.js  charts.js
       plans.js  menus.js  collab.js  history.js  ai.js  agents.js
       database.js  blocks.js  modals.js  sidebar.js  app.js
