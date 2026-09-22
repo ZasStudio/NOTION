@@ -133,37 +133,9 @@ const Menus = (() => {
     "🎵 🍀 🌱 🌍 🌤️ 🌙 ⭐ 🔥 🐞 🤝 🏢 🏠 🧭 💼 💰 🧾 🛒 🍎 ☕ 🍕 🐳 🦊 🐼 🦄 🎉 🎁 ❤️ 💜 💙 " +
     "💚 🧡 🤍 🖤").split(" ");
 
-  function emojiMenu({ x, y, onPick, onRemove, onUpload }) {
-    const grid = U.el("div", {
-      style: {
-        display: "grid", gridTemplateColumns: "repeat(9, 1fr)",
-        gap: "2px", padding: "6px 10px", maxHeight: "260px", overflowY: "auto",
-      },
-    });
-    EMOJI.forEach((e) =>
-      grid.append(
-        U.el("button", {
-          text: e,
-          style: { fontSize: "20px", lineHeight: "28px", borderRadius: "4px" },
-          onmouseenter: (ev) => (ev.target.style.background = "var(--hover)"),
-          onmouseleave: (ev) => (ev.target.style.background = "transparent"),
-          onclick: () => { onPick(e); closeAll(); },
-        })
-      )
-    );
-    const items = [
-      { type: "label", label: "Elige un icono" },
-      { type: "custom", node: grid },
-    ];
-    if (onUpload) {
-      items.push({ type: "separator" },
-        { label: "Subir una imagen…", icon: ICONS.image, onClick: onUpload });
-    }
-    if (onRemove) {
-      items.push(onUpload ? { type: "separator" } : { type: "separator" },
-        { label: "Quitar", icon: ICONS.trash, onClick: onRemove });
-    }
-    return open({ x, y, items, width: 300 });
+  function emojiMenu({ x, y, onPick, onRemove, onUpload, value }) {
+    // El selector completo (emoji, iconos de línea y subida) vive en IconPicker
+    return IconPicker.open({ x, y, onPick, onRemove, onUpload, value });
   }
 
   /* ------------------------ Barra flotante de formato --------------------- */

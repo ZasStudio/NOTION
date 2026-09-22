@@ -303,9 +303,12 @@ const App = (() => {
     /* Icono */
     if (page.icon) {
       const isImageIcon = page.icon.startsWith("asset:") || /^https?:\/\//.test(page.icon);
+      const lineIcon = IconSet.parse(page.icon);
       const iconEl = U.el("div", {
-        class: "page-icon" + (isImageIcon ? " is-image" : ""),
-        text: isImageIcon ? "" : page.icon,
+        class: "page-icon" + (isImageIcon ? " is-image" : "") +
+          (lineIcon ? " is-line c-" + lineIcon.color : ""),
+        html: lineIcon ? IconSet.lineSvg(lineIcon.name, 72) : null,
+        text: isImageIcon || lineIcon ? null : page.icon,
         onclick: (e) => {
           const r = e.currentTarget.getBoundingClientRect();
           Menus.emojiMenu({
@@ -500,9 +503,12 @@ const App = (() => {
     const inner = U.el("div", { class: "peek-page" });
 
     const isImageIcon = page.icon && (page.icon.startsWith("asset:") || /^https?:\/\//.test(page.icon));
+    const peekLine = IconSet.parse(page.icon || "");
     const icon = U.el("div", {
-      class: "peek-icon" + (isImageIcon ? " is-image" : ""),
-      text: isImageIcon ? "" : page.icon || "📄",
+      class: "peek-icon" + (isImageIcon ? " is-image" : "") +
+        (peekLine ? " is-line c-" + peekLine.color : ""),
+      html: peekLine ? IconSet.lineSvg(peekLine.name, 40) : null,
+      text: isImageIcon || peekLine ? null : page.icon || "📄",
       onclick: (e) => {
         const r = e.currentTarget.getBoundingClientRect();
         Menus.emojiMenu({

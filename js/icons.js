@@ -61,6 +61,7 @@ const ICONS = (() => {
     palette: s('<path d="M8 1.8a6.2 6.2 0 0 0 0 12.4c1 0 1.4-.7 1.4-1.4 0-.9-.8-1.3-.8-2 0-.6.5-1.1 1.2-1.1h1.2A3.2 3.2 0 0 0 14.2 6.5C13.8 3.7 11.2 1.8 8 1.8z"/><circle cx="5" cy="6.4" r=".9" fill="currentColor" stroke="none"/><circle cx="8" cy="4.8" r=".9" fill="currentColor" stroke="none"/><circle cx="11" cy="6.2" r=".9" fill="currentColor" stroke="none"/>'),
     check: `<svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m3.5 8.4 3 3 6-6.6"/></svg>`,
     x: s('<path d="M4 4l8 8M12 4l-8 8"/>'),
+    shuffle: s('<path d="M2.4 4h2.2l6 8h2.8"/><path d="M2.4 12h2.2l2-2.6"/><path d="M9.6 6.6 11.4 4h2"/><path d="M11.8 2.4 13.6 4l-1.8 1.6"/><path d="M11.8 10.4 13.6 12l-1.8 1.6"/>'),
     undo: s('<path d="M3 7.2h7.2a3.4 3.4 0 0 1 0 6.8H6.4"/><path d="M5.6 4 2.8 7.2 5.6 10"/>'),
     expand: s('<path d="M9.6 2.4h4v4M6.4 13.6h-4v-4M13.6 2.4 9.2 6.8M2.4 13.6l4.4-4.4"/>'),
     import: s('<path d="M8 2.4v7.2M5.2 6.8 8 9.6l2.8-2.8"/><path d="M2.6 11v1.6a1 1 0 0 0 1 1h8.8a1 1 0 0 0 1-1V11"/>'),

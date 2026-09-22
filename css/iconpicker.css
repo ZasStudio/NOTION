@@ -1,0 +1,90 @@
+/* ==========================================================================
+   Selector de iconos: pestañas, buscador, carril de categorías y rejilla
+   ========================================================================== */
+.icon-picker {
+  position: fixed; z-index: 690; width: min(420px, calc(100vw - 24px));
+  background: var(--bg-elevated); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-menu); outline: none; overflow: hidden;
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  backdrop-filter: saturate(180%) blur(24px);
+  animation: rise 120ms var(--ease);
+  display: flex; flex-direction: column; max-height: min(460px, 80vh);
+}
+
+.ip-tabs {
+  display: flex; align-items: center; gap: 2px;
+  padding: 8px 10px 4px; border-bottom: 1px solid var(--divider);
+}
+.ip-tab {
+  height: 28px; padding: 0 10px; border-radius: var(--radius-sm);
+  font-size: 13.5px; color: var(--text-secondary);
+}
+.ip-tab:hover { background: var(--hover); }
+.ip-tab.is-active { background: var(--active); color: var(--text); font-weight: 500; }
+.ip-remove { margin-left: auto; font-size: 13px; color: var(--text-tertiary); padding: 0 6px; height: 28px; border-radius: var(--radius-sm); }
+.ip-remove:hover { background: var(--hover); color: var(--text); }
+
+.ip-tools { display: flex; align-items: center; gap: 6px; padding: 8px 10px; }
+.ip-search {
+  flex: 1; height: 30px; border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm); background: var(--bg-input);
+  padding: 0 10px; font-size: 14px; color: var(--text); outline: none;
+}
+.ip-search:focus { border-color: var(--accent); }
+.ip-icon-btn, .ip-color {
+  width: 30px; height: 30px; flex: none; border-radius: var(--radius-sm);
+  display: grid; place-items: center; color: var(--text-secondary);
+}
+.ip-icon-btn:hover, .ip-color:hover { background: var(--hover); color: var(--text); }
+.ip-dot { width: 15px; height: 15px; border-radius: 50%; background: currentColor; display: block; }
+.ip-swatch {
+  width: 14px; height: 14px; border-radius: 50%; background: currentColor;
+  display: inline-block; box-shadow: 0 0 0 1px var(--divider);
+}
+
+.ip-rail {
+  display: flex; gap: 2px; padding: 0 8px 6px; overflow-x: auto;
+  border-bottom: 1px solid var(--divider);
+}
+.ip-rail.is-hidden { display: none; }
+.ip-rail::-webkit-scrollbar { height: 0; }
+.ip-cat {
+  width: 30px; height: 28px; flex: none; border-radius: var(--radius-sm);
+  display: grid; place-items: center; font-size: 16px; color: var(--text-tertiary);
+}
+.ip-cat:hover { background: var(--hover); }
+.ip-cat.is-active { background: var(--active); color: var(--text); }
+
+.ip-body { flex: 1; overflow-y: auto; padding: 6px 8px 12px; }
+.ip-group-title {
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0.03em;
+  color: var(--text-tertiary); text-transform: uppercase; padding: 8px 6px 4px;
+}
+.ip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 2px; }
+.ip-cell {
+  height: 34px; border-radius: var(--radius-sm); font-size: 20px; line-height: 1;
+  display: grid; place-items: center; transition: background var(--speed) var(--ease), transform 120ms var(--ease);
+}
+.ip-cell:hover { background: var(--hover); transform: scale(1.12); }
+.ip-cell:active { transform: scale(0.94); }
+/* el color lo pone la clase c-<color> que acompaña a la celda */
+.ip-empty { padding: 20px; text-align: center; color: var(--text-tertiary); font-size: 13.5px; }
+
+/* Los iconos de línea heredan el color donde se usan */
+.line-icon { display: block; }
+.page-line-icon { display: inline-grid; place-items: center; }
+.page-icon.is-line, .peek-icon.is-line { display: grid; place-items: center; width: fit-content; }
+.page-icon.is-line .line-icon { width: 72px; height: 72px; stroke-width: 1.4; }
+.peek-icon.is-line .line-icon { width: 40px; height: 40px; stroke-width: 1.5; }
+
+@media (max-width: 760px) {
+  .icon-picker {
+    left: 0 !important; right: 0; bottom: 0; top: auto !important;
+    width: 100%; max-width: none; max-height: 78svh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .ip-grid { grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); }
+  .ip-cell { height: 40px; }
+  .ip-search { font-size: 16px; }
+}

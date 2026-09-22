@@ -32,6 +32,16 @@ Dos pieles, conmutables en *Ajustes → Apariencia*:
   hay `backdrop-filter`.
 - **Clásico**: la réplica fiel del diseño plano de Notion.
 
+## Iconos
+
+El selector de iconos replica el de Notion: pestañas **Emoji · Íconos · Subir**,
+buscador por nombre en español, aleatorio y recientes. La pestaña *Emoji* trae
+**803 emojis** en nueve categorías con carril lateral; *Íconos* trae **105
+iconos de línea** en seis familias que se pueden teñir con los diez colores de
+Notion (se guardan como `ico:nombre:color` y se pintan en la página, el árbol
+lateral, la ventana lateral y las bases de datos). *Subir* abre el selector de
+medios de siempre.
+
 ## Guía en tiempo real
 
 La primera vez que alguien entra se abre sola una guía de nueve pasos que
@@ -183,9 +193,10 @@ trimestrales y Seguimiento de bugs.
 ```
 index.html
 css/  tokens.css  base.css  layout.css  editor.css  database.css
-      overlays.css  pro.css  glass.css  tour.css  responsive.css
-js/   utils.js  icons.js  templates.js  store.js  assets.js  charts.js
-      plans.js  menus.js  collab.js  history.js  ai.js  agents.js
+      overlays.css  pro.css  glass.css  iconpicker.css  tour.css
+      responsive.css
+js/   utils.js  icons.js  iconset.js  templates.js  store.js  assets.js  charts.js
+      plans.js  menus.js  iconpicker.js  collab.js  history.js  ai.js  agents.js
       database.js  blocks.js  modals.js  sidebar.js  tour.js  app.js
 ```
 
@@ -195,7 +206,8 @@ dibuja las vistas y el motor de fórmulas, relaciones y automatizaciones;
 `ai.js` el asistente; `agents.js` skills, conexiones MCP y rutinas; `collab.js` compartir y comentarios; `history.js`
 versiones, analíticas, auditoría y exportaciones; `charts.js` las gráficas SVG; `assets.js` el almacén de archivos y el selector de medios;
 `modals.js` buscador, plantillas, papelera, ajustes y el anuncio; `tour.js` la
-guía guiada con sus maquetas animadas. `responsive.css` adapta los paneles a
+guía guiada con sus maquetas animadas; `iconset.js` el repertorio de emojis e
+iconos de línea y `iconpicker.js` el selector. `responsive.css` adapta los paneles a
 monitores grandes y a móvil.
 
 ## Notas

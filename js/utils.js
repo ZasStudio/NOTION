@@ -113,6 +113,12 @@ const U = (() => {
   /** Icono de una página: emoji, o imagen si es un archivo subido o una URL. */
   function iconNode(icon, size = 16) {
     const value = icon || "📄";
+    // Icono de línea con color: «ico:nombre:color»
+    const line = typeof IconSet !== "undefined" ? IconSet.parse(value) : null;
+    if (line) {
+      const svg = IconSet.lineSvg(line.name, size);
+      if (svg) return el("span", { class: "page-line-icon c-" + line.color, html: svg });
+    }
     const isImage = value.startsWith("asset:") || /^https?:\/\//.test(value) || value.startsWith("data:");
     if (!isImage) return el("span", { class: "page-emoji", text: value, style: { fontSize: size + "px" } });
     const node = el("span", {

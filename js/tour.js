@@ -398,7 +398,11 @@ const Tour = (() => {
   /** Se abre sola la primera vez, después del anuncio de novedades. */
   function maybeAutoStart(delay = 700) {
     if (Store.state.seenTour) return;
-    setTimeout(() => { if (!document.querySelector(".overlay")) start(); else maybeAutoStart(900); }, delay);
+    setTimeout(() => {
+      if (Store.state.seenTour) return;          // se marcó vista mientras esperaba
+      if (!document.querySelector(".overlay")) start();
+      else maybeAutoStart(900);
+    }, delay);
   }
 
   return { start, maybeAutoStart, STEPS };
