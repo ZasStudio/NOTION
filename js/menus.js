@@ -133,7 +133,7 @@ const Menus = (() => {
     "🎵 🍀 🌱 🌍 🌤️ 🌙 ⭐ 🔥 🐞 🤝 🏢 🏠 🧭 💼 💰 🧾 🛒 🍎 ☕ 🍕 🐳 🦊 🐼 🦄 🎉 🎁 ❤️ 💜 💙 " +
     "💚 🧡 🤍 🖤").split(" ");
 
-  function emojiMenu({ x, y, onPick, onRemove }) {
+  function emojiMenu({ x, y, onPick, onRemove, onUpload }) {
     const grid = U.el("div", {
       style: {
         display: "grid", gridTemplateColumns: "repeat(9, 1fr)",
@@ -155,8 +155,13 @@ const Menus = (() => {
       { type: "label", label: "Elige un icono" },
       { type: "custom", node: grid },
     ];
+    if (onUpload) {
+      items.push({ type: "separator" },
+        { label: "Subir una imagen…", icon: ICONS.image, onClick: onUpload });
+    }
     if (onRemove) {
-      items.push({ type: "separator" }, { label: "Quitar", icon: ICONS.trash, onClick: onRemove });
+      items.push(onUpload ? { type: "separator" } : { type: "separator" },
+        { label: "Quitar", icon: ICONS.trash, onClick: onRemove });
     }
     return open({ x, y, items, width: 300 });
   }

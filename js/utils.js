@@ -108,6 +108,20 @@ const U = (() => {
   const atStart = (node) => caretOffset(node) === 0;
   const atEnd = (node) => caretOffset(node) >= (node.textContent || "").length;
 
+  /** Icono de una página: emoji, o imagen si es un archivo subido o una URL. */
+  function iconNode(icon, size = 16) {
+    const value = icon || "📄";
+    const isImage = value.startsWith("asset:") || /^https?:\/\//.test(value) || value.startsWith("data:");
+    if (!isImage) return el("span", { class: "page-emoji", text: value, style: { fontSize: size + "px" } });
+    const node = el("span", {
+      class: "icon-img",
+      style: { width: size + "px", height: size + "px" },
+    });
+    if (typeof Assets !== "undefined") Assets.attach(node, value, "background");
+    else node.style.backgroundImage = `url("${value}")`;
+    return node;
+  }
+
   function toast(msg) {
     document.querySelector(".toast")?.remove();
     const t = el("div", { class: "toast", text: msg });
@@ -136,6 +150,6 @@ const U = (() => {
   return {
     uid, el, $, $$, debounce, escapeHtml, sanitizeInline, stripHtml, today,
     formatDate, timeAgo, clamp, placeCaret, caretOffset, atStart, atEnd, toast,
-    NOTION_COLORS, COLOR_LABELS, pickColor,
+    NOTION_COLORS, COLOR_LABELS, pickColor, iconNode,
   };
 })();

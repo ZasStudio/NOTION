@@ -73,7 +73,7 @@ const App = (() => {
           U.el(
             "button",
             { class: "crumb", onclick: () => Store.open(p.id) },
-            U.el("span", { text: p.icon || "📄" }),
+            U.iconNode(p.icon, 15),
             U.el("span", { text: p.title || "Sin título" })
           )
         );
@@ -253,43 +253,32 @@ const App = (() => {
     /* Portada */
     if (page.cover) {
       const isGradient = page.cover.startsWith("linear-gradient");
-      wrap.append(
-        U.el(
+      const coverEl = U.el(
           "div",
           {
             class: "page-cover",
-            style: isGradient ? { backgroundImage: page.cover } : { backgroundImage: `url(${page.cover})` },
+            style: isGradient ? { backgroundImage: page.cover } : {},
           },
           U.el(
             "div", { class: "cover-actions" },
             U.el("button", {
               class: "btn", text: "Cambiar portada",
-              onclick: (e) => {
-                const r = e.currentTarget.getBoundingClientRect();
-                Menus.open({
-                  x: r.left - 60, y: r.bottom + 4, width: 240,
-                  items: [
-                    ...COVERS.map((c, i) => ({
-                      label: "Degradado " + (i + 1),
-                      swatch: { class: "", text: "" },
-                      onClick: () => { Store.updatePage(page.id, { cover: c }); renderPage(true); },
-                    })),
-                    { type: "separator" },
-                    { label: "Desde una URL…", icon: ICONS.link, onClick: () => {
-                        const url = prompt("URL de la imagen:");
-                        if (url) { Store.updatePage(page.id, { cover: url }); renderPage(true); }
-                      } },
-                  ],
-                });
-              },
+              onclick: (e) =>
+                Assets.pick({
+                  anchor: e.currentTarget,
+                  tabs: ["gallery", "upload", "link", "recent"],
+                  onPick: (value) => { Store.updatePage(page.id, { cover: value }); renderPage(true); },
+                  onRemove: () => { Store.updatePage(page.id, { cover: "" }); renderPage(true); },
+                }),
             }),
             U.el("button", {
               class: "btn", text: "Quitar",
               onclick: () => { Store.updatePage(page.id, { cover: "" }); renderPage(true); },
             })
           )
-        )
       );
+      if (!isGradient) Assets.attach(coverEl, page.cover, "background");
+      wrap.append(coverEl);
     }
 
     const body = U.el("div", { class: "page-body" });
@@ -299,19 +288,26 @@ const App = (() => {
 
     /* Icono */
     if (page.icon) {
-      top.append(
-        U.el("div", {
-          class: "page-icon", text: page.icon,
-          onclick: (e) => {
-            const r = e.target.getBoundingClientRect();
-            Menus.emojiMenu({
-              x: r.left, y: r.bottom + 6,
-              onPick: (emo) => { Store.updatePage(page.id, { icon: emo }); renderPage(true); },
-              onRemove: () => { Store.updatePage(page.id, { icon: "" }); renderPage(true); },
-            });
-          },
-        })
-      );
+      const isImageIcon = page.icon.startsWith("asset:") || /^https?:\/\//.test(page.icon);
+      const iconEl = U.el("div", {
+        class: "page-icon" + (isImageIcon ? " is-image" : ""),
+        text: isImageIcon ? "" : page.icon,
+        onclick: (e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          Menus.emojiMenu({
+            x: r.left, y: r.bottom + 6,
+            onPick: (emo) => { Store.updatePage(page.id, { icon: emo }); renderPage(true); },
+            onRemove: () => { Store.updatePage(page.id, { icon: "" }); renderPage(true); },
+            onUpload: () =>
+              Assets.pick({
+                anchor: iconEl, tabs: ["upload", "link", "recent"],
+                onPick: (value) => { Store.updatePage(page.id, { icon: value }); renderPage(true); },
+              }),
+          });
+        },
+      });
+      if (isImageIcon) Assets.attach(iconEl, page.icon, "background");
+      top.append(iconEl);
     }
 
     /* Controles de portada/icono */

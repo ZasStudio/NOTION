@@ -78,6 +78,9 @@ const Store = (() => {
     ],
     routines: [],
 
+    /* --- Archivos subidos (los binarios viven en IndexedDB) --- */
+    assets: [],
+
     /* --- Colaboración e historial --- */
     comments: {},
     versions: {},
@@ -105,6 +108,7 @@ const Store = (() => {
       if (!Array.isArray(next[key]) || !next[key].length) next[key] = base[key];
     }
     if (!Array.isArray(next.routines)) next.routines = [];
+    if (!Array.isArray(next.assets)) next.assets = [];
     for (const page of Object.values(next.pages || {})) {
       if (page.teamspaceId === undefined) page.teamspaceId = null;
       if (!page.share) page.share = { public: false, roles: {}, locked: false };

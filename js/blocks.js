@@ -46,6 +46,7 @@ const Editor = (() => {
     quote: "Cita",
     callout: "Escribe algo destacado…",
     code: "Escribe tu código…",
+    image: "Escribe un pie de foto",
   };
 
   const NON_TEXT = ["divider", "image", "html", "table-db", "subpage", "bookmark",
@@ -513,23 +514,101 @@ const Editor = (() => {
 
       case "image": {
         if (block.src) {
-          wrap.append(
-            U.el(
-              "div", { class: "image-wrap" },
-              U.el("img", { src: block.src, alt: U.stripHtml(block.text) }),
-              makeContent("image-caption")
-            )
-          );
-        } else {
-          wrap.append(
-            U.el("div", {
-              class: "image-empty", html: ICONS.image + "<span>Añade una imagen (URL)</span>",
-              onclick: () => {
-                const url = prompt("URL de la imagen:");
-                if (url) { block.src = url; touch(); render(); }
+          const img = U.el("img", { alt: U.stripHtml(block.text) });
+          Assets.attach(img, block.src);
+
+          // Sin ancho fijado se respeta el tamaño natural, como en Notion
+          const frame = U.el("div", {
+            class: "image-frame align-" + (block.align || "left") + (block.width ? "" : " is-natural"),
+            style: block.width ? { width: block.width + "%" } : {},
+          });
+
+          // Asas de redimensionado a ambos lados, como en Notion
+          ["left", "right"].forEach((side) => {
+            const handle = U.el("div", { class: "image-handle handle-" + side });
+            handle.addEventListener("mousedown", (e) => {
+              e.preventDefault();
+              const startX = e.clientX;
+              const startW = frame.offsetWidth;
+              const containerW = frame.parentElement.offsetWidth;
+              const onMove = (ev) => {
+                const delta = (ev.clientX - startX) * (side === "right" ? 1 : -1);
+                const pct = U.clamp(((startW + delta * 2) / containerW) * 100, 20, 100);
+                frame.style.width = pct + "%";
+                block.width = Math.round(pct);
+              };
+              const onUp = () => {
+                document.removeEventListener("mousemove", onMove);
+                document.removeEventListener("mouseup", onUp);
+                touch();
+              };
+              document.addEventListener("mousemove", onMove);
+              document.addEventListener("mouseup", onUp);
+            });
+            handle.addEventListener("dblclick", () => { block.width = 100; touch(); render(); });
+            frame.append(handle);
+          });
+
+          const toolbar = U.el(
+            "div", { class: "image-tools" },
+            U.el("button", {
+              class: "btn", text: "Reemplazar",
+              onclick: (e) => openPicker(block, e.currentTarget),
+            }),
+            U.el("button", {
+              class: "btn", html: ICONS.palette, title: "Alineación",
+              onclick: (e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                Menus.open({
+                  x: r.left - 60, y: r.bottom + 4, width: 180,
+                  items: [
+                    { label: "Izquierda", active: (block.align || "left") === "left",
+                      onClick: () => { block.align = "left"; touch(); render(); } },
+                    { label: "Centrada", active: block.align === "center",
+                      onClick: () => { block.align = "center"; touch(); render(); } },
+                    { label: "Derecha", active: block.align === "right",
+                      onClick: () => { block.align = "right"; touch(); render(); } },
+                    { type: "separator" },
+                    { label: "Ancho original", onClick: () => { block.width = 100; touch(); render(); } },
+                  ],
+                });
+              },
+            }),
+            U.el("button", {
+              class: "btn", html: ICONS.import, title: "Descargar",
+              onclick: async () => {
+                const href = await Assets.url(block.src);
+                if (!href) return U.toast("No se encontró el archivo");
+                U.el("a", { href, download: Assets.meta(Assets.idOf(block.src))?.name || "imagen" }).click();
               },
             })
           );
+
+          frame.append(img, toolbar);
+          const box = U.el("div", { class: "image-wrap" }, frame, makeContent("image-caption"));
+          img.addEventListener("error", () => {
+            box.prepend(U.el("div", { class: "image-broken", text: "No se pudo cargar la imagen." }));
+          });
+          wrap.append(box);
+        } else {
+          const empty = U.el("div", {
+            class: "image-empty",
+            html: ICONS.image + "<span>Añade una imagen</span>",
+            onclick: (e) => openPicker(block, e.currentTarget),
+            ondragover: (e) => { e.preventDefault(); empty.classList.add("is-over"); },
+            ondragleave: () => empty.classList.remove("is-over"),
+            ondrop: async (e) => {
+              e.preventDefault();
+              empty.classList.remove("is-over");
+              const file = e.dataTransfer.files[0];
+              if (!file) return;
+              const saved = await Assets.save(file);
+              block.src = saved.ref;
+              touch();
+              render();
+            },
+          });
+          wrap.append(empty);
         }
         break;
       }
@@ -667,9 +746,13 @@ const Editor = (() => {
               U.el("div", { class: "file-meta" },
                 U.el("div", { class: "file-name", text: block.fileName }),
                 U.el("div", { class: "file-size", text: block.fileSize || "" })),
-              U.el("a", {
-                class: "btn", text: "Descargar", download: block.fileName,
-                href: block.dataUrl || "#",
+              U.el("button", {
+                class: "btn", text: "Descargar",
+                onclick: async () => {
+                  const href = block.dataUrl || (await Assets.url(block.src));
+                  if (!href) return U.toast("No se encontró el archivo");
+                  U.el("a", { href, download: block.fileName }).click();
+                },
               })
             )
           );
@@ -679,20 +762,16 @@ const Editor = (() => {
               class: "image-empty", html: ICONS.import + "<span>Sube un archivo · sin límite de tamaño</span>",
               onclick: () => {
                 const input = U.el("input", { type: "file" });
-                input.onchange = () => {
+                input.onchange = async () => {
                   const f = input.files[0];
                   if (!f) return;
-                  const reader = new FileReader();
-                  reader.onload = () => {
-                    block.fileName = f.name;
-                    block.fileSize = (f.size / 1024 > 1024)
-                      ? (f.size / 1048576).toFixed(1) + " MB"
-                      : Math.max(1, Math.round(f.size / 1024)) + " KB";
-                    block.dataUrl = reader.result;
-                    touch();
-                    render();
-                  };
-                  reader.readAsDataURL(f);
+                  const saved = await Assets.save(f);
+                  block.fileName = f.name;
+                  block.fileSize = Assets.fmtSize(saved.size);
+                  block.src = saved.ref;
+                  delete block.dataUrl;
+                  touch();
+                  render();
                 };
                 input.click();
               },
@@ -835,7 +914,7 @@ const Editor = (() => {
               class: "subpage-link",
               onclick: () => child && Store.open(child.id),
             },
-            U.el("span", { text: child?.icon || "📄", style: { fontSize: "18px" } }),
+            U.iconNode(child?.icon, 18),
             U.el("span", { class: "subpage-title", text: child?.title || "Página eliminada" })
           )
         );
@@ -846,6 +925,20 @@ const Editor = (() => {
         wrap.append(makeContent());
     }
     return wrap;
+  }
+
+  /** Abre el selector de medios para un bloque de imagen. */
+  function openPicker(block, anchor) {
+    Assets.pick({
+      anchor,
+      tabs: ["upload", "link", "recent"],
+      onRemove: block.src ? () => { block.src = ""; touch(); render(); } : null,
+      onPick: (value) => {
+        block.src = value;
+        touch();
+        render();
+      },
+    });
   }
 
   /** Convierte enlaces conocidos en su URL insertable. */
@@ -1079,7 +1172,29 @@ const Editor = (() => {
       }
     });
 
-    node.addEventListener("paste", (e) => {
+    node.addEventListener("paste", async (e) => {
+      // Una imagen en el portapapeles se convierte en bloque de imagen
+      const imageItem = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith("image/"));
+      if (imageItem) {
+        e.preventDefault();
+        const file = imageItem.getAsFile();
+        if (!file) return;
+        U.toast("Guardando imagen…");
+        const saved = await Assets.save(file);
+        Store.snapshot();
+        const isEmpty = !U.stripHtml(block.text).trim() && block.type === "paragraph";
+        if (isEmpty) {
+          block.type = "image";
+          block.src = saved.ref;
+          touch();
+          render();
+        } else {
+          insertBlock(block.id, Store.makeBlock("image", { src: saved.ref }), false);
+        }
+        U.toast("Imagen insertada");
+        return;
+      }
+
       const text = e.clipboardData?.getData("text/plain") || "";
       if (!text) return;
       e.preventDefault();
@@ -1199,11 +1314,51 @@ const Editor = (() => {
     if (scroll !== undefined && root.parentElement) root.parentElement.scrollTop = scroll;
   }
 
+  /** Permite soltar imágenes en cualquier punto de la página. */
+  function bindPageDrop(container) {
+    container.addEventListener("dragover", (e) => {
+      if (!e.dataTransfer?.types?.includes("Files")) return;
+      e.preventDefault();
+      container.classList.add("is-file-over");
+    });
+    container.addEventListener("dragleave", (e) => {
+      if (e.target === container) container.classList.remove("is-file-over");
+    });
+    container.addEventListener("drop", async (e) => {
+      const files = [...(e.dataTransfer?.files || [])];
+      if (!files.length) return;
+      e.preventDefault();
+      container.classList.remove("is-file-over");
+
+      const near = e.target.closest?.(".block");
+      const anchorId = near?.dataset.id || null;
+      Store.snapshot();
+      let cursor = anchorId;
+
+      for (const file of files) {
+        const isImage = /^image\//.test(file.type);
+        const saved = await Assets.save(file);
+        const made = isImage
+          ? Store.makeBlock("image", { src: saved.ref })
+          : Store.makeBlock("file", {
+              src: saved.ref, fileName: file.name, fileSize: Assets.fmtSize(saved.size),
+            });
+        const at = cursor ? blockIndex(cursor) + 1 : page.blocks.length;
+        page.blocks.splice(at, 0, made);
+        cursor = made.id;
+      }
+      touch();
+      render();
+      U.toast(files.length > 1 ? `${files.length} archivos añadidos` : "Archivo añadido");
+    });
+  }
+
   function mount(targetPage, container) {
     page = targetPage;
     root = container;
     selection.clear();
     render();
+    bindPageDrop(container);
   }
 
   return {

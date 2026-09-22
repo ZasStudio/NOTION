@@ -44,7 +44,7 @@ const Modals = (() => {
               onmouseenter: () => { active = i; paint(); },
               onclick: () => { Store.open(p.id); modal.close(); },
             },
-            U.el("span", { text: p.icon || "📄", style: { fontSize: "16px" } }),
+            U.iconNode(p.icon, 16),
             U.el(
               "span", {},
               U.el("div", { class: "s-title", text: p.title || "Sin título" }),
@@ -174,7 +174,7 @@ const Modals = (() => {
         listWrap.append(
           U.el(
             "div", { class: "search-item" },
-            U.el("span", { text: p.icon || "📄" }),
+            U.iconNode(p.icon, 16),
             U.el("span", { class: "s-title", text: p.title || "Sin título" }),
             U.el(
               "span", { style: { marginLeft: "auto", display: "flex", gap: "6px" } },
@@ -248,16 +248,35 @@ const Modals = (() => {
         U.el("button", { class: "btn btn-bordered", text: "Ver anuncio", onclick: () => { modal.close(); cooking(); } })
       ),
       row(
+        "Archivos subidos",
+        U.el(
+          "div", { style: { display: "flex", alignItems: "center", gap: "10px" } },
+          U.el("span", { class: "share-mail",
+            text: `${Assets.usage().count} archivo(s) · ${Assets.fmtSize(Assets.usage().bytes)}` }),
+          U.el("button", {
+            class: "btn btn-bordered", text: "Ver",
+            onclick: (e) => Assets.pick({
+              anchor: e.currentTarget, tabs: ["recent", "upload"],
+              onPick: () => U.toast("Usa el selector desde un bloque de imagen para insertarla"),
+            }),
+          })
+        )
+      ),
+      row(
         "Datos",
         U.el(
           "div", { style: { display: "flex", gap: "6px" } },
           U.el("button", {
             class: "btn btn-bordered", text: "Exportar",
-            onclick: () => {
-              const blob = new Blob([Store.exportJSON()], { type: "application/json" });
-              const a = U.el("a", { href: URL.createObjectURL(blob), download: "workspace.json" });
-              a.click();
-              U.toast("Workspace exportado");
+            onclick: async (e) => {
+              e.currentTarget.textContent = "Empaquetando…";
+              // Las imágenes viajan dentro del JSON para que sea autocontenido
+              const payload = JSON.parse(Store.exportJSON());
+              payload.__assets = await Assets.exportAll();
+              const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+              U.el("a", { href: URL.createObjectURL(blob), download: "workspace.json" }).click();
+              e.currentTarget.textContent = "Exportar";
+              U.toast("Workspace exportado con sus imágenes");
             },
           }),
           U.el("button", {
@@ -268,7 +287,11 @@ const Modals = (() => {
                 const file = input.files[0];
                 if (!file) return;
                 try {
-                  Store.importJSON(await file.text());
+                  const raw = JSON.parse(await file.text());
+                  const blobs = raw.__assets;
+                  delete raw.__assets;
+                  if (blobs) await Assets.importAll(blobs);
+                  Store.importJSON(JSON.stringify(raw));
                   U.toast("Workspace importado");
                   modal.close();
                 } catch (err) {

@@ -43,7 +43,8 @@ const History = (() => {
 
       const snap = v.snapshot;
       const body = U.el("div", { class: "hist-doc" });
-      body.append(U.el("h1", { text: (snap.icon ? snap.icon + " " : "") + (snap.title || "Sin título") }));
+      const h1 = U.el("h1", {}, U.iconNode(snap.icon, 24), U.el("span", { text: " " + (snap.title || "Sin título") }));
+      body.append(h1);
       snap.blocks.forEach((b) => {
         const text = U.stripHtml(b.text);
         if (b.type === "divider") return body.append(U.el("hr"));

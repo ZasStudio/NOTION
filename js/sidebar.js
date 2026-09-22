@@ -73,10 +73,8 @@ const Sidebar = (() => {
           Store.emit();
         },
       }),
-      U.el("span", {
-        class: "tree-emoji" + (kids.length ? " has-children" : ""),
-        text: page.icon || "📄",
-      }),
+      U.el("span", { class: "tree-emoji" + (kids.length ? " has-children" : "") },
+        U.iconNode(page.icon, 14)),
       U.el("span", { class: "tree-label", text: page.title || "Sin título" }),
       U.el(
         "span", { class: "tree-actions" },

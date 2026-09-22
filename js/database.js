@@ -869,11 +869,12 @@ const Database = (() => {
       grid.append(
         U.el(
           "div", { class: "gallery-card", onclick: () => openRow(row) },
-          U.el("div", {
-            class: "gallery-cover",
-            text: cover ? "" : (Store.getPage(row.pageId)?.icon || "📄"),
-            style: cover ? { backgroundImage: `url(${row.cells[cover.id]})` } : {},
-          }),
+          (() => {
+            const el = U.el("div", { class: "gallery-cover" });
+            if (cover) el.style.backgroundImage = `url(${row.cells[cover.id]})`;
+            else el.append(U.iconNode(Store.getPage(row.pageId)?.icon, 34));
+            return el;
+          })(),
           U.el(
             "div", { class: "gallery-body" },
             U.el("div", { class: "gallery-title", text: row.cells[tp.id] || "Sin título" }),
@@ -908,7 +909,7 @@ const Database = (() => {
       wrap.append(
         U.el(
           "div", { class: "list-row", onclick: () => openRow(row) },
-          U.el("span", { text: Store.getPage(row.pageId)?.icon || "📄" }),
+          U.iconNode(Store.getPage(row.pageId)?.icon, 16),
           U.el("span", { class: "list-title", text: row.cells[tp.id] || "Sin título" }),
           U.el(
             "span", { class: "list-meta" },
