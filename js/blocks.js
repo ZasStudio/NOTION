@@ -71,6 +71,7 @@ const Editor = (() => {
     list.forEach((b) => {
       ownerOf.set(b.id, list);
       if (b.type === "columns") (b.cols || []).forEach((c) => indexBlocks(c.blocks || []));
+      if (b.children && b.children.length) indexBlocks(b.children);
     });
   }
 
@@ -83,6 +84,7 @@ const Editor = (() => {
       for (const b of list) {
         if (b.id === id) { found = b; return; }
         if (b.type === "columns") (b.cols || []).forEach((c) => walk(c.blocks || []));
+        if (b.children && b.children.length) walk(b.children);
       }
     };
     walk(page.blocks);
@@ -132,6 +134,7 @@ const Editor = (() => {
     Store.snapshot();
     b.type = type;
     if (type === "callout" && !b.emoji) b.emoji = "💡";
+    if (type === "callout" && !b.children) b.children = [];
     if (type === "callout" && b.color === "default") b.color = "gray";
     if (type === "code" && !b.lang) b.lang = "javascript";
     if (type === "html" && !b.src) {
@@ -676,6 +679,29 @@ const Editor = (() => {
       }
 
       case "callout": {
+        const inner = U.el("div", { class: "callout-inner" });
+        inner.append(makeContent());
+
+        // Un destacado puede contener otros bloques, como en Notion
+        if (block.children && block.children.length) {
+          const kids = U.el("div", { class: "callout-children" });
+          renderList(block.children, kids);
+          inner.append(kids);
+        }
+        inner.append(
+          U.el("button", {
+            class: "callout-add", html: ICONS.plus + "<span>Añadir dentro</span>",
+            onclick: () => {
+              block.children = block.children || [];
+              const b = Store.makeBlock();
+              block.children.push(b);
+              touch();
+              render();
+              focusBlock(b.id);
+            },
+          })
+        );
+
         const box = U.el(
           "div", { class: "callout-box b-" + (block.color === "default" ? "gray" : block.color) },
           U.el("span", {
@@ -688,7 +714,7 @@ const Editor = (() => {
               });
             },
           }),
-          makeContent()
+          inner
         );
         wrap.append(box);
         break;
@@ -859,6 +885,8 @@ const Editor = (() => {
       }
 
       case "columns": {
+        if (!block.cols || !block.cols.length)
+          block.cols = [{ width: 50, blocks: [Store.makeBlock()] }, { width: 50, blocks: [Store.makeBlock()] }];
         const row = U.el("div", { class: "columns-row" });
         (block.cols || []).forEach((col, ci) => {
           const colHost = U.el("div", {

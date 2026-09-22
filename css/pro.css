@@ -333,8 +333,12 @@ body.comments-open #comments { width: 300px; }
 .crumb-link { color: var(--text-secondary); padding: 2px 4px; border-radius: var(--radius-sm); }
 .crumb-link:hover { background: var(--hover); color: var(--text); }
 
-.btn-block { display: flex; align-items: center; gap: 6px; }
-.btn-action { height: 34px; }
+.btn-block { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* En una columna estrecha el botón se ajusta en vez de desbordarse */
+.btn-action { height: 34px; max-width: 100%; min-width: 0; }
+.btn-action span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
 
 .file-block {
   display: flex; align-items: center; gap: 12px; width: 100%;
@@ -728,3 +732,18 @@ body.peek-open #main #topbar { pointer-events: auto; }
 .peek-title[data-empty="true"]::before { content: attr(data-placeholder); color: var(--text-tertiary); }
 .peek-divider { height: 1px; background: var(--divider); margin: 14px 0 10px; }
 .peek-page .block-gutter { left: -44px; }
+
+/* Bloques dentro de un destacado */
+.callout-inner { flex: 1; min-width: 0; }
+.callout-children { margin-top: 6px; }
+.callout-children .block { margin: 0; padding: 1px 2px; }
+/* Dentro de un destacado no hay margen para el gutter: taparía el contenido */
+.callout-children .block-gutter { display: none; }
+.callout-children .block-divider .rule { margin: 6px 0; }
+.callout-add {
+  display: flex; align-items: center; gap: 6px; margin-top: 4px;
+  padding: 3px 4px; border-radius: var(--radius-sm);
+  font-size: 12.5px; color: var(--text-tertiary); opacity: 0;
+}
+.block-callout:hover .callout-add { opacity: 1; }
+.callout-add:hover { background: var(--hover); color: var(--text-secondary); }

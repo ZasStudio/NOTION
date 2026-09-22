@@ -413,6 +413,80 @@ const Templates = (() => {
       }),
     },
     {
+      id: "panel-control",
+      name: "Panel de control",
+      icon: "🎛️",
+      category: "work",
+      desc: "Columna de navegación con tarjetas y columna ancha con bases de datos.",
+      build: () => {
+        const props = [
+          prop("Evento", "title"),
+          prop("Tipo", "select", ["Reunión", "Entrega", "Grabación"]),
+          prop("Fecha", "date"),
+          prop("Estado", "select", ["Por planear", "En progreso", "Terminado"]),
+          prop("Responsable", "person"),
+        ];
+        const database = db("Fechas", props, [
+          ["Revisión de guiones", "Reunión", U.today(), "Por planear", "Ana"],
+          ["Grabación del spot", "Grabación", "", "Por planear", "Sofía"],
+          ["Entrega al cliente", "Entrega", "", "En progreso", "Luis"],
+        ]);
+        database.views = [
+          view("Calendario", "calendar", { dateProp: props[2].id }),
+          view("Todo", "table"),
+          view("Por estado", "board", { groupBy: props[3].id }),
+          view("Por responsable", "board", { groupBy: props[4].id }),
+        ];
+        database.activeView = database.views[0].id;
+
+        return {
+          title: "Panel de control",
+          icon: "🎛️",
+          cover: "linear-gradient(135deg,#f5c63f,#d9730d)",
+          fullWidth: true,
+          blocks: [
+            B("columns", "", {
+              cols: [
+                {
+                  width: 22,
+                  blocks: [
+                    B("callout", "<strong>Menú</strong>", {
+                      emoji: "☰", color: "gray",
+                      children: [B("divider"), B("toc")],
+                    }),
+                    B("callout", "<strong>Acciones</strong>", {
+                      emoji: "⚡", color: "gray",
+                      children: [
+                        B("divider"),
+                        B("button", "", { label: "Añadir evento", action: { type: "row" } }),
+                        B("button", "", {
+                          label: "Apuntar un pendiente",
+                          action: { type: "insert", blockType: "todo", text: "Nuevo pendiente" },
+                        }),
+                      ],
+                    }),
+                  ],
+                },
+                {
+                  width: 78,
+                  blocks: [
+                    h2("🎫 Fechas"),
+                    B("table-db"),
+                    divider(),
+                    h2("📝 Preparativos"),
+                    todo("Confirmar sala y horario"),
+                    todo("Enviar la agenda a los asistentes"),
+                    todo("Preparar el material"),
+                  ],
+                },
+              ],
+            }),
+          ],
+          db: database,
+        };
+      },
+    },
+    {
       id: "bug-tracker",
       name: "Seguimiento de bugs",
       icon: "🐞",
@@ -458,8 +532,10 @@ const Templates = (() => {
     if (!tpl) return null;
     const spec = tpl.build();
     const page = store.createPage({
-      title: spec.title, icon: spec.icon, blocks: spec.blocks, db: spec.db, parentId,
+      title: spec.title, icon: spec.icon, cover: spec.cover,
+      blocks: spec.blocks, db: spec.db, parentId,
     });
+    if (spec.fullWidth) page.fullWidth = true;
     (spec.children || []).forEach((child) =>
       store.createPage({ ...child, parentId: page.id })
     );

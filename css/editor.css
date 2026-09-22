@@ -70,8 +70,11 @@
   position: absolute; left: -50px; top: 0; height: 28px;
   display: flex; align-items: center; gap: 1px;
   opacity: 0; transition: opacity var(--speed);
+  /* Invisible no debe interceptar clics: en una columna estrecha el gutter de
+     un bloque cae encima del contenido del vecino. */
+  pointer-events: none;
 }
-.block:hover > .block-gutter, .block-gutter:focus-within { opacity: 1; }
+.block:hover > .block-gutter, .block-gutter:focus-within { opacity: 1; pointer-events: auto; }
 .gutter-btn {
   width: 22px; height: 24px; border-radius: var(--radius-sm);
   display: grid; place-items: center; color: var(--text-tertiary);

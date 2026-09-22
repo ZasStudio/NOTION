@@ -173,7 +173,11 @@ const App = (() => {
       case "todo": return `- [${b.checked ? "x" : " "}] ${text}`;
       case "toggle": return `<details><summary>${text}</summary></details>`;
       case "quote": return `> ${text}`;
-      case "callout": return `> ${b.emoji || "💡"} ${text}`;
+      case "callout": {
+        const head = `> ${b.emoji || "💡"} ${text}`;
+        const kids = (b.children || []).map((c) => "> " + blockToMarkdown(c, page)).join("\n");
+        return kids ? `${head}\n${kids}` : head;
+      }
       case "divider": return "---";
       case "code": return "```" + (b.lang || "") + "\n" + text + "\n```";
       case "image": return `![${text}](${b.src || ""})`;
